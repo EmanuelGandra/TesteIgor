@@ -138,7 +138,6 @@ def credenciais_inseridas():
 
 
 def autenticar_usuario() -> bool:
-    st.rerun()  # recarrega a página para garantir que o estado seja limpo
     # inicializa a flag uma única vez
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
