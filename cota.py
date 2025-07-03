@@ -14,40 +14,54 @@ from workalendar.america import Brazil # <<< CORREÇÃO APLICADA AQUI
 
 # ============================== FUNÇÕES DE LOGIN ============================== #
 import bcrypt  # pip install bcrypt
-
 CARD_CSS = """
 <style>
-/* container ≃ primeiro div que aparece DENTRO do bloco st.container() */
-div[data-testid="stVerticalBlock"]:has(figure[data-testid="stImage"]) {      /* ✅ */
-    max-width:360px;
-    margin:6rem auto 0 auto;   /* centraliza na tela */
+/* ───────────────────────── 1.  Centralizar o bloco inteiro ───────────────────────── */
+/* 1.a) Torna a área principal um flex-box que empurra tudo p/ o centro                */
+section[data-testid="stMain"] > div.block-container {
+    display:flex;                  /* ativa flex-box              */
+    justify-content:center;        /* eixo-X (horizontal)          */
+    align-items:flex-start;        /* se quiser centro vertical → center  */
+    min-height:100vh;              /* ocupa altura toda da viewport */
+}
+
+/* 1.b) Seleciona o VerticalBlock que contém logo + formulário                         */
+section[data-testid="stMain"] div[data-testid="stVerticalBlock"]:has(form) {
+    width:360px;                   /* ⬅️ largura fixa p/ margin funcionar     */
+    /* opcional: deixa responsivo   max-width:90%;                                */
     padding:2rem 2.5rem;
     background:#fff;
     border-radius:12px;
     box-shadow:0 0 15px rgba(0,0,0,.08);
     text-align:center;
 }
-/* logo */
-div[data-testid="stVerticalBlock"] figure.stImage {
-    margin-bottom:1.2rem;   /* espaço abaixo da imagem                    */
+
+/* ───────────────────────── 2.  Detalhes internos ───────────────────────── */
+/* Logo */
+section[data-testid="stMain"] figure.stImage{
+    margin-bottom:1.2rem;
 }
-/* campos de entrada dentro do card */
-div[data-testid="stVerticalBlock"] input {
+
+/* Inputs */
+section[data-testid="stMain"] input{
     background:#fff !important;
     color:#000 !important;
     border:1px solid #ced4da !important;
     border-radius:6px !important;
 }
-/* botão */
-div[data-testid="stVerticalBlock"] button {
+
+/* Botão */
+section[data-testid="stMain"] button{
     background:#004c97 !important;
     color:#fff !important;
     width:100%;
     padding:0.6rem 0;
     border:none;
 }
-body {background:#f5f7fa;}
-#MainMenu, footer {visibility:hidden;}
+
+/* Fundo + cabeçalho/rodapé */
+body{background:#f5f7fa;}
+#MainMenu, footer{visibility:hidden;}
 </style>
 """
 st.markdown(CARD_CSS, unsafe_allow_html=True)
