@@ -23,13 +23,48 @@ st.set_page_config(page_title="Dashboard XYZ",
 
 _HIDE = """
 <style>
+/* – esconde menu/rodapé –*/
 #MainMenu, footer {visibility:hidden;}
+
+/* – cor de fundo da página –*/
 body {background:#f5f7fa;}
-.login-card {max-width:360px;margin:auto;
-             padding:2rem 2.5rem;background:white;
-             border-radius:12px;
-             box-shadow:0 0 15px rgba(0,0,0,.08);}
-.stButton>button {background:#004c97;color:white;width:100%;}
+
+/* – card de login –*/
+.login-card {
+    max-width:360px;               /* largura fixa */
+    margin:auto;                   /* centraliza */
+    padding:2rem 2.5rem;
+    background:#ffffff;
+    border-radius:12px;
+    box-shadow:0 0 15px rgba(0,0,0,.08);
+}
+
+/* – logo dentro do card –*/
+.login-card img {
+    display:block;
+    margin:0 auto 1.2rem auto;     /* centraliza e dá espaço abaixo */
+}
+
+/* – inputs personalizados –*/
+.login-card input {
+    background:#ffffff !important; /* fundo branco */
+    color:#000000 !important;      /* texto preto */
+    border:1px solid #ced4da !important;
+    border-radius:6px !important;
+}
+.login-card label {                /* rótulos */
+    font-weight:600;
+    margin-bottom:0.25rem;
+}
+
+/* – botão primário –*/
+.stButton>button {
+    background:#004c97;
+    color:#ffffff;
+    width:100%;
+    border:none;
+    padding:0.6rem 0;
+}
 </style>
 """
 st.markdown(_HIDE, unsafe_allow_html=True)
@@ -80,31 +115,28 @@ def credenciais_inseridas():
 
 
 
-
 def autenticar_usuario() -> bool:
-    """
-    Renderiza o card de login; devolve True se o usuário já estiver autenticado.
-    """
     if st.session_state.get("authenticated"):
         return True
 
-    st.image("logo.png", width=160)   # coloque seu logo
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)  # ⬅️ abre card
 
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.image("logo.png", width=160)                                  # ⬅️ logo central
+
     with st.form("login", clear_on_submit=False):
         st.text_input("Usuário", key="user_input")
-        st.text_input("Senha", type="password", key="password_input")
+        st.text_input("Senha",  type="password", key="password_input")
         submitted = st.form_submit_button("Entrar")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)                    # ⬅️ fecha card
 
     if submitted:
         st.toast("⏳ Verificando…", icon="⏳")
         credenciais_inseridas()
-        st.wait(1)  # Simula um pequeno atraso para a transição visual
         st.rerun()
 
     return False
+
 
 # ============================== CONFIGURAÇÕES ============================== #
 TIPO_RELATORIO = 3
