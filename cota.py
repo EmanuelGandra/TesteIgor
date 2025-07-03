@@ -68,6 +68,7 @@ body {background:#f5f7fa;}
 </style>
 """
 st.markdown(_HIDE, unsafe_allow_html=True)
+#
 
 # ────────────────────────  FUNÇÕES DE AUTENTICAÇÃO  ─────────────────────────
 def _check_password(user: str, pwd: str) -> bool:
