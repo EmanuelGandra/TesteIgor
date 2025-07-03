@@ -82,7 +82,6 @@ _HIDE = """
     }
 </style>
 """
-#
 
 # ────────────────────────  FUNÇÕES DE AUTENTICAÇÃO  ─────────────────────────
 def _check_password(user: str, pwd: str) -> bool:
@@ -428,6 +427,7 @@ if autenticar_usuario():
             st.rerun()
     else:
         nomes_fundos = {cnpj: FUNDOS[cnpj]["nome"] for cnpj in dados_base_do_dia.keys()}
+        st.sidebar.header("Seleção de Fundo")
         cnpj_selecionado = st.sidebar.selectbox("Selecione o fundo para visualizar:", options=list(nomes_fundos.keys()),
                                         format_func=lambda c: nomes_fundos[c], key="fundo_selectbox")
 
@@ -438,11 +438,17 @@ if autenticar_usuario():
             btn1, btn2 = st.columns(2)
             
             with btn1:
+                st.sidebar.write('---')
+                st.sidebar.header("Ações")
+                st.sidebar.caption("Atualize os preços ou puxe a carteira do BTG.")
+                st.sidebar.caption("A atualização pode levar alguns segundos.")
                 atualizar = st.sidebar.button("🔄 Atualizar Preços")
                 if st.session_state.last_update_time.get(cnpj_selecionado):
                     st.sidebar.caption(f"Preços atualizados às {st.session_state.last_update_time[cnpj_selecionado]:%H:%M:%S}")
 
             with btn2:
+                st.sidebar.write('---')
+                st.sidebar.header("Recarregar Carteira")
                 if st.sidebar.button("📥 Puxar Carteira BTG"):
                     with st.sidebar.spinner("Limpando cache e buscando novamente os dados do BTG..."):
                         st.cache_data.clear()
