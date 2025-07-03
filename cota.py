@@ -107,9 +107,6 @@ def autenticar_usuario() -> bool:
         # CARD
     with st.container():                      # tudo aqui dentro receberá o CSS
         st.image("logo.png", width=160)
-        # ---------------  LOGIN CARD  ---------------
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        st.image("logo.png", width=160)
 
         with st.form("login", clear_on_submit=False):
             st.text_input("Usuário", key="user_input")
