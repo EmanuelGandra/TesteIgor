@@ -138,27 +138,33 @@ def credenciais_inseridas():
 
 
 def autenticar_usuario() -> bool:
-    if st.session_state.get("authenticated"):
+    st.rerun()  # recarrega a página para garantir que o estado seja limpo
+    # inicializa a flag uma única vez
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    # se já logado, não mostra o formulário
+    if st.session_state["authenticated"]:
         return True
 
-    st.markdown('<div class="login-card">', unsafe_allow_html=True)  # ⬅️ abre card
-
-    st.image("logo.png", width=160)                                  # ⬅️ logo central
+    # ---------------  LOGIN CARD  ---------------
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.image("logo.png", width=160)
 
     with st.form("login", clear_on_submit=False):
         st.text_input("Usuário", key="user_input")
-        st.text_input("Senha",  type="password", key="password_input")
+        st.text_input("Senha", type="password", key="password_input")
         submitted = st.form_submit_button("Entrar")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)                    # ⬅️ fecha card
-
+    # ---------------  VALIDAÇÃO  ---------------
     if submitted:
         st.toast("⏳ Verificando…", icon="⏳")
-        credenciais_inseridas()
-        st.rerun()
+        credenciais_inseridas()          # set authenticated True/False
 
+        if st.session_state["authenticated"]:
+            st.rerun()                   # agora sim, recarrega sem o form
     return False
-
 
 # ============================== CONFIGURAÇÕES ============================== #
 TIPO_RELATORIO = 3
