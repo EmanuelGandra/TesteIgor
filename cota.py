@@ -96,6 +96,7 @@ def credenciais_inseridas() -> None:
         if user or pwd:                       # só mostra erro se algo foi digitado
             st.toast("❌ Usuário ou senha inválido", icon="❌")
 
+#
 
 def autenticar_usuario() -> bool:
     # inicializa a flag uma única vez
