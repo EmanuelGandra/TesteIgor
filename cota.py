@@ -221,18 +221,26 @@ def recalcular_metricas(df_base, cota_ontem, qtd_cotas, pl):
         # ----------- NOVO CÓDIGO (consulta em lote) -----------
         tickers_sa = [f"{t}.SA" for t in df["Ticker"]]
         # uma única chamada; 'Adj Close' já vem ajustado
-        precios = (yf.download(
-                    tickers_sa,
-                    period="1d",
-                    group_by="ticker",
-                    threads=False,         # sem paralelismo → menos 429
-                    progress=False)
-                ["Adj Close"]
-                .iloc[-1])               # último preço
+        dados = yf.download(
+            tickers_sa,
+            period="1d",
+            group_by="ticker",
+            threads=False,
+            progress=False,
+            auto_adjust=True               # << coluna será "Close"
+                )
 
-        # mapeia cada ticker do dataframe ao preço baixado
+        # Se houver vários tickers, 'dados' tem MultiIndex; se for só 1, não.
+        if isinstance(dados.columns, pd.MultiIndex):
+            precios = dados.xs("Close", level=1, axis=1).iloc[-1]   # Série (ticker → preço)
+        else:
+            # apenas 1 ticker => Series / escalar
+            precios = pd.Series(dados["Close"].iloc[-1],
+                                index=[tickers_sa[0]])
+
         df["Preço Hoje (R$)"] = df["Ticker"].apply(
-            lambda t: precios[f"{t}.SA"])
+            lambda t: precios[f"{t}.SA"]
+        )
 
     df["Variação Preço (%)"] = (df["Preço Hoje (R$)"] / df["Preço Ontem (R$)"] - 1).fillna(0)
     df["Valor Hoje (R$)"] = df["Quantidade de Ações"] * df["Preço Hoje (R$)"]
