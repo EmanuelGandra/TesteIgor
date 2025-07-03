@@ -54,17 +54,31 @@ def _check_password(user: str, pwd: str) -> bool:
         return False
 
 
-def credenciais_inseridas() -> None:
-    """Executa a validação e faz update no session_state."""
-    user = st.session_state["user_input"].lower()
-    pwd  = st.session_state["password_input"]
-    ok = _check_password(user, pwd)
-    st.session_state["authenticated"] = ok
-    if ok:
-        st.session_state["username"] = user
+
+
+def credenciais_inseridas():
+    if "senha_login" not in st.secrets:
+        st.error("A chave 'senha_login' não foi encontrada nos segredos do Streamlit.")
+        return
+        
+    usuarios_validos = {
+        "admin": st.secrets["senha_login"]
+    }
+    usuario_inserido = st.session_state.get("user_input", "").lower()
+    senha_inserida = st.session_state.get("password_input", "")
+    if usuario_inserido in usuarios_validos and usuarios_validos[usuario_inserido] == senha_inserida:
+        st.session_state["authenticated"] = True
+        st.session_state["username"] = usuario_inserido
         st.toast("✅ Login realizado!", icon="✅")
     else:
-        st.toast("❌ Usuário ou senha inválido", icon="❌")
+        st.session_state["authenticated"] = False
+        if not usuario_inserido and not senha_inserida:
+            pass
+        else:
+            #st.error("Usuário ou senha inválido.")
+            st.toast("❌ Usuário ou senha inválido", icon="❌")
+
+
 
 
 def autenticar_usuario() -> bool:
@@ -87,6 +101,7 @@ def autenticar_usuario() -> bool:
     if submitted:
         st.toast("⏳ Verificando…", icon="⏳")
         credenciais_inseridas()
+        st.wait(1)  # Simula um pequeno atraso para a transição visual
         st.rerun()
 
     return False
