@@ -13,9 +13,7 @@ from zoneinfo import ZoneInfo
 from workalendar.america import Brazil # <<< CORREÇÃO APLICADA AQUI
 
 # ============================== FUNÇÕES DE LOGIN ============================== #
-
 import bcrypt  # pip install bcrypt
-
 
 _HIDE = """
 <style>
@@ -84,22 +82,29 @@ _HIDE = """
     }
 </style>
 """
-st.markdown(_HIDE, unsafe_allow_html=True)
 #
 
 # ────────────────────────  FUNÇÕES DE AUTENTICAÇÃO  ─────────────────────────
 def _check_password(user: str, pwd: str) -> bool:
     """
-    Retorna True se (user, pwd) corresponderem ao que está em st.secrets.
-    Aceita senha em texto puro ou hash bcrypt.
+    Valida (user, pwd) contra o que está em st.secrets.
+
+    Nos seus segredos você só tem:
+        senha_login = "alguma_coisa"
+    portanto o único usuário válido é 'admin'.
+
+    A função também funciona se você trocar essa string
+    por um hash gerado com bcrypt.hashpw().
     """
-    cred = st.secrets["credentials"]
-    if user not in cred:
-        return False
-    stored = cred[user]
+    if user.lower() != "admin":
+        return False                          # qualquer outro login é rejeitado
+
+    stored = st.secrets["senha_login"]        # texto puro ou hash
+
     # texto puro
     if stored == pwd:
         return True
+
     # hash bcrypt
     try:
         return bcrypt.checkpw(pwd.encode(), stored.encode())
@@ -107,33 +112,25 @@ def _check_password(user: str, pwd: str) -> bool:
         return False
 
 
+def credenciais_inseridas() -> None:
+    """
+    Atualiza st.session_state['authenticated'] e mostra toast.
+    """
+    user = st.session_state.get("user_input", "").lower()
+    pwd  = st.session_state.get("password_input", "")
 
-
-def credenciais_inseridas():
-    if "senha_login" not in st.secrets:
-        st.error("A chave 'senha_login' não foi encontrada nos segredos do Streamlit.")
-        return
-        
-    usuarios_validos = {
-        "admin": st.secrets["senha_login"]
-    }
-    usuario_inserido = st.session_state.get("user_input", "").lower()
-    senha_inserida = st.session_state.get("password_input", "")
-    if usuario_inserido in usuarios_validos and usuarios_validos[usuario_inserido] == senha_inserida:
+    if _check_password(user, pwd):
         st.session_state["authenticated"] = True
-        st.session_state["username"] = usuario_inserido
+        st.session_state["username"] = user
         st.toast("✅ Login realizado!", icon="✅")
     else:
         st.session_state["authenticated"] = False
-        if not usuario_inserido and not senha_inserida:
-            pass
-        else:
-            #st.error("Usuário ou senha inválido.")
+        if user or pwd:                       # só mostra erro se algo foi digitado
             st.toast("❌ Usuário ou senha inválido", icon="❌")
 
 
-
 def autenticar_usuario() -> bool:
+    st.markdown(_HIDE, unsafe_allow_html=True)
     # inicializa a flag uma única vez
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
