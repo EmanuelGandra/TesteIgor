@@ -23,6 +23,17 @@ _HIDE = """
         display:block;
         margin:0 auto 1.2rem auto;   /* centraliza e afasta */
     }
+    /* ─────────  LOGO REALMENTE CENTRAL  ─────────
+    centraliza o container que o Streamlit cria
+    em volta do <img>                            */
+    .login-card [data-testid="stImage"]{
+        display:flex;               /* ativa flexbox            */
+        justify-content:center;     /* centraliza horizontalmente*/
+        margin-bottom:1.2rem;       /* espaço abaixo da logo      */
+    }
+
+    /* opcional: se quiser deixar tudo do card no centro */
+    .login-card { text-align:center; }
 
     /* ───────────── 2. campo de texto branco + fonte preta ─────────────
        O seletor abaixo usa TODAS as classes que o Streamlit colocou
@@ -82,6 +93,7 @@ _HIDE = """
     }
 </style>
 """
+st.markdown(_HIDE, unsafe_allow_html=True)
 
 # ────────────────────────  FUNÇÕES DE AUTENTICAÇÃO  ─────────────────────────
 def _check_password(user: str, pwd: str) -> bool:
@@ -319,8 +331,6 @@ def css_var(v):
         if v > 0: return "color: green;"
         if v < 0: return "color: red;"
     return ""
-
-
 
 
 def add_custom_css():
