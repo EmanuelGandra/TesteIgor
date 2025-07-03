@@ -217,7 +217,23 @@ def get_ibov_acumulado(data_inicio: str, data_fim: str) -> float:
 def recalcular_metricas(df_base, cota_ontem, qtd_cotas, pl):
     with st.spinner("Buscando preços atuais no Yahoo Finance..."):
         df = df_base.copy()
-        df["Preço Hoje (R$)"] = df["Ticker"].map(lambda t: yf.Ticker(f"{t}.SA").info.get("regularMarketPrice", None))
+        #df["Preço Hoje (R$)"] = df["Ticker"].map(lambda t: yf.Ticker(f"{t}.SA").info.get("regularMarketPrice", None))
+        # ----------- NOVO CÓDIGO (consulta em lote) -----------
+        tickers_sa = [f"{t}.SA" for t in df["Ticker"]]
+        # uma única chamada; 'Adj Close' já vem ajustado
+        precios = (yf.download(
+                    tickers_sa,
+                    period="1d",
+                    group_by="ticker",
+                    threads=False,         # sem paralelismo → menos 429
+                    progress=False)
+                ["Adj Close"]
+                .iloc[-1])               # último preço
+
+        # mapeia cada ticker do dataframe ao preço baixado
+        df["Preço Hoje (R$)"] = df["Ticker"].apply(
+            lambda t: precios[f"{t}.SA"])
+
     df["Variação Preço (%)"] = (df["Preço Hoje (R$)"] / df["Preço Ontem (R$)"] - 1).fillna(0)
     df["Valor Hoje (R$)"] = df["Quantidade de Ações"] * df["Preço Hoje (R$)"]
     valor_hoje = df["Valor Hoje (R$)"].fillna(0).sum()
