@@ -15,85 +15,7 @@ from workalendar.america import Brazil # <<< CORREÇÃO APLICADA AQUI
 # ============================== FUNÇÕES DE LOGIN ============================== #
 import bcrypt  # pip install bcrypt
 
-_HIDE = """
-<style>
 
-/* ───────────── 1. logo central ───────────── */
-    .login-card img {
-        display:block;
-        margin:0 auto 1.2rem auto;   /* centraliza e afasta */
-    }
-    /* ─────────  LOGO REALMENTE CENTRAL  ─────────
-    centraliza o container que o Streamlit cria
-    em volta do <img>                            */
-    .login-card [data-testid="stImage"]{
-        display:flex;               /* ativa flexbox            */
-        justify-content:center;     /* centraliza horizontalmente*/
-        margin-bottom:1.2rem;       /* espaço abaixo da logo      */
-    }
-
-    /* opcional: se quiser deixar tudo do card no centro */
-    .login-card { text-align:center; }
-
-    /* ───────────── 2. campo de texto branco + fonte preta ─────────────
-       O seletor abaixo usa TODAS as classes que o Streamlit colocou
-       no seu <input>, exatamente como no print:                       */
-    input.st-ba.st-bw.st-bx.st-by.st-bz.st-c0.st-c1.st-c2.st-c3.st-c4.st-c5.st-b8.st-c6.st-c7.st-c8.st-c9.st-ca.st-cb.st-cc.st-cd.st-ae.st-af.st-ag.st-ce.st-ai.st-aj.st-bv.st-cf.st-cg {
-        background:#FFFFFF !important;   /* fundo branco */
-        color:#000000 !important;        /* texto preto  */
-        border:1px solid #CED4DA !important;
-    }
-
-    /* ───────────── 3. placeholder também preto ───────────── */
-    input.st-ba.st-bw.st-bx.st-by.st-bz.st-c0.st-c1.st-c2.st-c3.st-c4.st-c5.st-b8.st-c6.st-c7.st-c8.st-c9.st-ca.st-cb.st-cc.st-cd.st-ae.st-af.st-ag.st-ce.st-ai.st-aj.st-bv.st-cf.st-cg::placeholder{
-        color:#00000080;  /* 80 = 50 % opacidade */
-    }
-        
-    /* – esconde menu/rodapé –*/
-    #MainMenu, footer {visibility:hidden;}
-
-    /* – cor de fundo da página –*/
-    body {background:#f5f7fa;}
-
-    /* – card de login –*/
-    .login-card {
-        max-width:360px;               /* largura fixa */
-        margin:auto;                   /* centraliza */
-        padding:2rem 2.5rem;
-        background:#ffffff;
-        border-radius:12px;
-        box-shadow:0 0 15px rgba(0,0,0,.08);
-    }
-
-    /* – logo dentro do card –*/
-    .login-card img {
-        display:block;
-        margin:0 auto 1.2rem auto;     /* centraliza e dá espaço abaixo */
-    }
-
-    /* – inputs personalizados –*/
-    .login-card input {
-        background:#ffffff !important; /* fundo branco */
-        color:#000000 !important;      /* texto preto */
-        border:1px solid #ced4da !important;
-        border-radius:6px !important;
-    }
-    .login-card label {                /* rótulos */
-        font-weight:600;
-        margin-bottom:0.25rem;
-    }
-
-    /* – botão primário –*/
-    .stButton>button {
-        background:#004c97;
-        color:#ffffff;
-        width:100%;
-        border:none;
-        padding:0.6rem 0;
-    }
-</style>
-"""
-st.markdown(_HIDE, unsafe_allow_html=True)
 
 # ────────────────────────  FUNÇÕES DE AUTENTICAÇÃO  ─────────────────────────
 def _check_password(user: str, pwd: str) -> bool:
@@ -141,7 +63,87 @@ def credenciais_inseridas() -> None:
 
 
 def autenticar_usuario() -> bool:
-    st.markdown(_HIDE, unsafe_allow_html=True)
+    st.markdown(
+        """
+    <style>
+
+    /* ───────────── 1. logo central ───────────── */
+        .login-card img {
+            display:block;
+            margin:0 auto 1.2rem auto;    /* centraliza e afasta */
+        }
+        /* ─────────  LOGO REALMENTE CENTRAL  ─────────
+        centraliza o container que o Streamlit cria
+        em volta do <img>                                */
+        .login-card [data-testid="stImage"]{
+            display:flex;                  /* ativa flexbox         */
+            justify-content:center;          /* centraliza horizontalmente*/
+            margin-bottom:1.2rem;          /* espaço abaixo da logo     */
+        }
+
+        /* opcional: se quiser deixar tudo do card no centro */
+        .login-card { text-align:center; }
+
+        /* ───────────── 2. campo de texto branco + fonte preta ─────────────
+            O seletor abaixo usa TODAS as classes que o Streamlit colocou
+            no seu <input>, exatamente como no print:                         */
+        input.st-ba.st-bw.st-bx.st-by.st-bz.st-c0.st-c1.st-c2.st-c3.st-c4.st-c5.st-b8.st-c6.st-c7.st-c8.st-c9.st-ca.st-cb.st-cc.st-cd.st-ae.st-af.st-ag.st-ce.st-ai.st-aj.st-bv.st-cf.st-cg {
+            background:#FFFFFF !important;    /* fundo branco */
+            color:#000000 !important;          /* texto preto    */
+            border:1px solid #CED4DA !important;
+        }
+
+        /* ───────────── 3. placeholder também preto ───────────── */
+        input.st-ba.st-bw.st-bx.st-by.st-bz.st-c0.st-c1.st-c2.st-c3.st-c4.st-c5.st-b8.st-c6.st-c7.st-c8.st-c9.st-ca.st-cb.st-cc.st-cd.st-ae.st-af.st-ag.st-ce.st-ai.st-aj.st-bv.st-cf.st-cg::placeholder{
+            color:#00000080;  /* 80 = 50 % opacidade */
+        }
+            
+        /* – esconde menu/rodapé –*/
+        #MainMenu, footer {visibility:hidden;}
+
+        /* – cor de fundo da página –*/
+        body {background:#f5f7fa;}
+
+        /* – card de login –*/
+        .login-card {
+            max-width:360px;                  /* largura fixa */
+            margin:auto;                      /* centraliza */
+            padding:2rem 2.5rem;
+            background:#ffffff;
+            border-radius:12px;
+            box-shadow:0 0 15px rgba(0,0,0,.08);
+        }
+
+        /* – logo dentro do card –*/
+        .login-card img {
+            display:block;
+            margin:0 auto 1.2rem auto;      /* centraliza e dá espaço abaixo */
+        }
+
+        /* – inputs personalizados –*/
+        .login-card input {
+            background:#ffffff !important; /* fundo branco */
+            color:#000000 !important;      /* texto preto */
+            border:1px solid #ced4da !important;
+            border-radius:6px !important;
+        }
+        .login-card label {            /* rótulos */
+            font-weight:600;
+            margin-bottom:0.25rem;
+        }
+
+        /* – botão primário –*/
+        .stButton>button {
+            background:#004c97;
+            color:#ffffff;
+            width:100%;
+            border:none;
+            padding:0.6rem 0;
+        }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )    
     # inicializa a flag uma única vez
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
