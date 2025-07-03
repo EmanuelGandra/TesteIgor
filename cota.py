@@ -18,14 +18,14 @@ import bcrypt  # pip install bcrypt
 CARD_CSS = """
 <style>
 /* container ≃ primeiro div que aparece DENTRO do bloco st.container() */
-div[data-testid="stVerticalBlock"]:has(> figure[data-testid="stImage"]) {
+div[data-testid="stVerticalBlock"]:has(figure[data-testid="stImage"]) {      /* ✅ */
     max-width:360px;
-    margin:auto;
+    margin:6rem auto 0 auto;   /* centraliza na tela */
     padding:2rem 2.5rem;
     background:#fff;
     border-radius:12px;
     box-shadow:0 0 15px rgba(0,0,0,.08);
-    text-align:center;      /* centraliza tudo dentro do card            */
+    text-align:center;
 }
 /* logo */
 div[data-testid="stVerticalBlock"] figure.stImage {
