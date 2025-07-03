@@ -14,35 +14,82 @@ from workalendar.america import Brazil # <<< CORREÇÃO APLICADA AQUI
 
 # ============================== FUNÇÕES DE LOGIN ============================== #
 
-def credenciais_inseridas():
-    if "senha_login" not in st.secrets:
-        st.error("A chave 'senha_login' não foi encontrada nos segredos do Streamlit.")
-        return
-        
-    usuarios_validos = {
-        "admin": st.secrets["senha_login"]
-    }
-    usuario_inserido = st.session_state.get("user_input", "").lower()
-    senha_inserida = st.session_state.get("password_input", "")
-    if usuario_inserido in usuarios_validos and usuarios_validos[usuario_inserido] == senha_inserida:
-        st.session_state["authenticated"] = True
-        st.session_state["username"] = usuario_inserido
+import bcrypt  # pip install bcrypt
+
+# ─────────────────────────  CONFIG GLOBAL  ──────────────────────────
+st.set_page_config(page_title="Dashboard XYZ",
+                   page_icon="🔒",
+                   layout="centered")
+
+_HIDE = """
+<style>
+#MainMenu, footer {visibility:hidden;}
+body {background:#f5f7fa;}
+.login-card {max-width:360px;margin:auto;
+             padding:2rem 2.5rem;background:white;
+             border-radius:12px;
+             box-shadow:0 0 15px rgba(0,0,0,.08);}
+.stButton>button {background:#004c97;color:white;width:100%;}
+</style>
+"""
+st.markdown(_HIDE, unsafe_allow_html=True)
+
+# ────────────────────────  FUNÇÕES DE AUTENTICAÇÃO  ─────────────────────────
+def _check_password(user: str, pwd: str) -> bool:
+    """
+    Retorna True se (user, pwd) corresponderem ao que está em st.secrets.
+    Aceita senha em texto puro ou hash bcrypt.
+    """
+    cred = st.secrets["credentials"]
+    if user not in cred:
+        return False
+    stored = cred[user]
+    # texto puro
+    if stored == pwd:
+        return True
+    # hash bcrypt
+    try:
+        return bcrypt.checkpw(pwd.encode(), stored.encode())
+    except ValueError:
+        return False
+
+
+def credenciais_inseridas() -> None:
+    """Executa a validação e faz update no session_state."""
+    user = st.session_state["user_input"].lower()
+    pwd  = st.session_state["password_input"]
+    ok = _check_password(user, pwd)
+    st.session_state["authenticated"] = ok
+    if ok:
+        st.session_state["username"] = user
+        st.toast("✅ Login realizado!", icon="✅")
     else:
-        st.session_state["authenticated"] = False
-        if not usuario_inserido and not senha_inserida:
-            pass
-        else:
-            st.error("Usuário ou senha inválido.")
+        st.toast("❌ Usuário ou senha inválido", icon="❌")
 
 
-def autenticar_usuario():
-    if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-    if st.session_state["authenticated"]: return True
-    st.text_input(label="Usuário", key="user_input")
-    st.text_input(label="Senha", type="password", key="password_input")
-    if st.button("Entrar"): credenciais_inseridas(); st.rerun()
+def autenticar_usuario() -> bool:
+    """
+    Renderiza o card de login; devolve True se o usuário já estiver autenticado.
+    """
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.image("logo.png", width=160)   # coloque seu logo
+
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    with st.form("login", clear_on_submit=False):
+        st.text_input("Usuário", key="user_input")
+        st.text_input("Senha", type="password", key="password_input")
+        submitted = st.form_submit_button("Entrar")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if submitted:
+        st.toast("⏳ Verificando…", icon="⏳")
+        credenciais_inseridas()
+        st.experimental_rerun()
+
     return False
-
 
 # ============================== CONFIGURAÇÕES ============================== #
 TIPO_RELATORIO = 3
@@ -289,11 +336,11 @@ def add_custom_css():
 
 
 
-add_custom_css()
 # ============================== INTERFACE STREAMLIT ============================== #
 st.set_page_config("Carteiras RV AF INVEST", layout="wide")
 
 if autenticar_usuario():
+    add_custom_css()
     data_carteira_str = ultimo_dia_util()
     data_formatada = datetime.strptime(data_carteira_str, '%Y-%m-%d').strftime('%d/%m/%Y')
     st.title(f"Carteiras RV AF INVEST - {data_formatada}")
