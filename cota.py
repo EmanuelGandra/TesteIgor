@@ -16,10 +16,6 @@ from workalendar.america import Brazil # <<< CORREÇÃO APLICADA AQUI
 
 import bcrypt  # pip install bcrypt
 
-# ─────────────────────────  CONFIG GLOBAL  ──────────────────────────
-st.set_page_config(page_title="Dashboard XYZ",
-                   page_icon="🔒",
-                   layout="centered")
 
 _HIDE = """
 <style>
