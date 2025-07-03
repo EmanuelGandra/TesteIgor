@@ -87,7 +87,7 @@ def autenticar_usuario() -> bool:
     if submitted:
         st.toast("⏳ Verificando…", icon="⏳")
         credenciais_inseridas()
-        st.experimental_rerun()
+        st.rerun()
 
     return False
 
