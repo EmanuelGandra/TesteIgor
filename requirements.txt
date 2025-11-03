@@ -17,6 +17,4 @@ pathlib
 typing
 requests
 pandas
-streamlit
-functools
 scipy 
