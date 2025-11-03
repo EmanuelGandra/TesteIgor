@@ -23,6 +23,5 @@ pandas
 streamlit
 functools
 re
-scipy
-pandas_market_calendars 
+scipy 
 numpy
