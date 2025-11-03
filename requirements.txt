@@ -13,14 +13,10 @@ plotly
 typing
 XlsxWriter
 bcrypt
-re
 pathlib
 typing
 requests
-numpy
 pandas
 streamlit
 functools
-re
 scipy 
-numpy
