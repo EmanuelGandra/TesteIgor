@@ -19,3 +19,4 @@ requests
 pandas
 scipy 
 pandas_market_calendars 
+unidecode 
