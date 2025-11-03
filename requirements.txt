@@ -18,3 +18,4 @@ typing
 requests
 pandas
 scipy 
+pandas_market_calendars 
