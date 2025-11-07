@@ -389,7 +389,7 @@ def _naive(ts):
 import pandas_market_calendars as mcal
 
 cal = mcal.get_calendar("BVMF")  # fallback (não usado quando o arquivo existir)
-FERIADOS_PATH = Path("Dados/feriados_nacionais.xls")
+FERIADOS_PATH = Path("feriados_nacionais.xls")
 
 @lru_cache(maxsize=1)
 def _load_feriados_set() -> set:
@@ -782,7 +782,7 @@ def _bday_count(d0: pd.Timestamp, d1: pd.Timestamp) -> int:
 
 # --------------------------- Leitura bases ---------------------------
 def find_relatorio_path() -> Optional[Path]:
-    files = sorted(Path(".").glob("Dados/Relatório de Posição 2025-10-31.xlsx"))
+    files = sorted(Path(".").glob("Dados/Relatório de Posição 2025-10-17.xlsx"))
     return files[0] if files else None
 
 @st.cache_data
@@ -1807,7 +1807,7 @@ df_di = build_di_export_df(curve_date, di_daily)
 if visao == "Match de Ativos e DI":
     st.title("HEDGE DI — Match de Ativos e DI")
 
-    tab1, tab2, tab3 = st.tabs(["Tabela de Match", "Curva DI (implícita a.a.)", "Confronto %CDI (PDF × Relatório)"])
+    tab1, tab2, tab3 = st.tabs(["📇 Tabela de Match", "📈 Curva DI (implícita a.a.)", "🔍 Confronto %CDI (PDF × Relatório)"])
 
     # ---- TAB 1: match + download XLSX local ----
     with tab1:
@@ -2060,7 +2060,7 @@ if visao == "Match de Ativos e DI":
         # 3. Cria uma lista de ativos "limpos" (sem NaN/vazios) da tabela 1
         ativos_limpos_lista = df_pdf_clean[COLUNA_ID_ATIVO_TABELA_1].unique()
 
-        with st.expander(f" Tabela de Potenciais Erros - Somente no Relatório (%CDI) ou Faltando Dados ", expanded=True):
+        with st.expander(f" Somente no Relatório (%CDI) ou Faltando Dados ", expanded=True):
             # --- Segunda tabela (deduplicada por categoria) ---
             def _is_blank_strategy(s: str) -> bool:
                 ss = str(s or "").strip().upper()
@@ -2103,7 +2103,7 @@ if visao == "Match de Ativos e DI":
                 st.info("Nada a mostrar nesta visão.")
             else:
                 st.dataframe(df_resumo_dedup, use_container_width=True, height=300)
-        with st.expander(f" Tabela de Potenciais Erros - Base Completa"):
+
             st.markdown("#### Base completa")
             if df_only_rel.empty:
                 st.info("Nada aqui.")
@@ -3206,21 +3206,20 @@ if visao == "Calculadora de Ativos":
                          (not merged.loc[merged["cod_Ativo_guess"].astype(str)==str(sel)].empty))
                      else MOTOR_PCT_CDI)
 
-    #motor = st.radio(
-    #    "Motor de cálculo",
-    #    [MOTOR_PCT_CDI, MOTOR_YTC_CHAMADAS],
-    #    index=(0 if motor_auto == MOTOR_PCT_CDI else 1),
-    #    help="PCT_CDI: usa CDI como indexador (bullet/cupom). YTC_CHAMADAS: fluxo até a próxima CALL.",
-    #    key=f"motor_{sel}"
-    #)
-    motor = MOTOR_PCT_CDI if motor_auto == MOTOR_PCT_CDI else MOTOR_YTC_CHAMADAS
-    #if inc_flag:
-        #st.caption(f"**Incorpora Juros:** {inc_flag}")
-    #if motor == MOTOR_PCT_CDI:
-        #if inc_flag == "SIM":
-            #st.caption("Forma de pagamento: **bullet capitalizado** (juros + principal no vencimento).")
-        #else:
-            #st.caption("Forma de pagamento: **cupom periódico** (sem capitalizar).")
+    motor = st.radio(
+        "Motor de cálculo",
+        [MOTOR_PCT_CDI, MOTOR_YTC_CHAMADAS],
+        index=(0 if motor_auto == MOTOR_PCT_CDI else 1),
+        help="PCT_CDI: usa CDI como indexador (bullet/cupom). YTC_CHAMADAS: fluxo até a próxima CALL.",
+        key=f"motor_{sel}"
+    )
+    if inc_flag:
+        st.caption(f"**Incorpora Juros:** {inc_flag}")
+    if motor == MOTOR_PCT_CDI:
+        if inc_flag == "SIM":
+            st.caption("Forma de pagamento: **bullet capitalizado** (juros + principal no vencimento).")
+        else:
+            st.caption("Forma de pagamento: **cupom periódico** (sem capitalizar).")
 
     # -------------------- Form principal (inalterado na UI) --------------------
     with st.form(key=f"form_calc_{sel}"):
@@ -3730,10 +3729,10 @@ if visao == "Calculadora de Ativos":
                 PU_dirty = PU_clean
 
 
-            #st.metric("PU limpo (VP dos fluxos)", _fmt_money(PU_clean))
+            st.metric("PU limpo (VP dos fluxos)", _fmt_money(PU_clean))
             if inc_flag != "SIM": 
-                st.metric("Juros Acruado (último cupom → base)", _fmt_money(accrued_now))
-            st.metric("PU", _fmt_money(PU_dirty))
+                st.metric("Accrual (último cupom → base)", _fmt_money(accrued_now))
+            st.metric("PU sujo (limpo + accrual)", _fmt_money(PU_dirty))
 
             # Caption informativa (mantida quando disponível)
             try:
@@ -3872,7 +3871,7 @@ if visao == "Calculadora de Ativos":
 
         c1v, c2v, c3v, c4v = st.columns(4)
         with c1v:
-            st.caption("PU calculado")
+            st.caption("PU calculado (sujo)")
             st.metric(label="", value=_fmt_money(PU_calc))
         with c2v:
             st.caption("PU posição (alvo)")
@@ -4484,6 +4483,8 @@ if visao == "Calculadora de Fundos":
 
         return s
 
+
+
     # ---------- Seleção do fundo ----------
     if ("Fundo" not in out.columns) or out.empty:
         st.info("Nenhum fundo disponível na tabela filtrada atual.")
@@ -4715,7 +4716,6 @@ if visao == "Calculadora de Fundos":
     _flux_cache: dict[tuple[str, float], tuple[pd.DataFrame, float]] = {}
     _accrual_df_base = st.session_state.setdefault("accrual_df_base", {})
     DEBUG  = st.sidebar.checkbox("Ver progresso", value=False)
-    
     def _fluxo_codigo_externo(code: str, fprep: dict, sR: pd.Series, df_extra: pd.DataFrame, bump_bps: float = 0.0
                             ) -> tuple[pd.DataFrame, float]:
         """
@@ -4846,6 +4846,7 @@ if visao == "Calculadora de Fundos":
 
         # Accrual “sujo”: omitido (0.0) — seu DV01 limpo não depende dele
         return df_ev, 0.0
+
 
     def _fluxo_codigo_DU(code: str, fprep: dict, sR: pd.Series, bump_bps: float = 0.0
                         ) -> tuple[pd.DataFrame, float]:
@@ -5264,617 +5265,609 @@ if visao == "Calculadora de Fundos":
             }),
             use_container_width=True, height=500
         )
-    # ---------- HEDGE — ANÁLISE PRINCIPAL (por Ano de Referência) ----------
+    # ---------- Hedge por Vértice (Key-Rate DV01) ----------   
     st.markdown("---")
-    st.markdown("### Hedge — Mapeamento por Ano de Referência (Duration)")
+    st.markdown("### Hedge por Vértice")
 
-    import re as _re
-
-    # ---------------------------
-    # Funções auxiliares comuns
-    # ---------------------------
-    def _bucket_norm_one(x: str, default_to_F=True) -> str | None:
-        """Normaliza para DIFyy/DINyy:
-        - 'DI27' → 'DIF27' (ou 'DIN27' se default_to_F=False)
-        - 'DIF27'/'DIN27' mantidos
-        - 'ODF26'/'ODN26' → 'DIF26'/'DIN26'
+    def _bucket_label(dt, use_underscore: bool = False) -> str | None:
         """
-        if x is None or (isinstance(x, float) and pd.isna(x)):
+        Mapeia a data do fluxo para o bucket do futuro de DI mais próximo:
+        - Jan do ano 'yy'  -> DIFyy
+        - Jun do ano 'yy'  -> DINyy
+        Se a data estiver mais próxima de jan do ano seguinte, cai em DIF(yy+1).
+        Observação: acima de 2030 só há contratos 'F' (DIF31, DIF32, DIF33, DIF35, DIF37).
+        """
+        if pd.isna(dt):
+            return None
+        d = pd.Timestamp(dt).normalize()
+        y = d.year
+
+        jan_y  = pd.Timestamp(year=y, month=1, day=2)   # 1ª sessão aprox.
+        jun_y  = pd.Timestamp(year=y, month=6, day=1)
+
+        # Distâncias absolutas
+        dist_jan = abs((d - jan_y).days)
+        dist_jun = abs((d - jun_y).days)
+
+        if dist_jan <= dist_jun:
+            bucket = f"DIF{y % 100:02d}"
+        else:
+            bucket = f"DIN{y % 100:02d}"
+
+        # Regra das caudas: se depois de out/nov, é mais natural cair em jan do ano+1
+        if d.month >= 10:
+            bucket = f"DIF{(y + 1) % 100:02d}"
+
+        # Limpeza por disponibilidade: acima de 2030, só DIF (F)
+        yy = int(bucket[-2:])
+        if yy >= 31:
+            bucket = f"DIF{yy:02d}"
+
+        return bucket
+    
+    def _bucket_norm_one(x: str, default_to_F=True) -> str | None:
+        """Normaliza qualquer variação para DIFyy/DINyy.
+        - 'DI27' → 'DIF27' (default_to_F=True) ou 'DIN27' se default_to_F=False
+        - 'DIF27'/'DIN27' mantidos
+        - 'DI_27', 'di 27' → 'DIF27'
+        """
+        if x is None or (isinstance(x, float) and pd.isna(x)): 
             return None
         s = str(x).strip().upper()
         s = _re.sub(r'\s+', '', s)
-
+        # já correto?
         m = _re.fullmatch(r'DI(F|N)(\d{2})', s)
-        if m:
+        if m: 
             return f'DI{m.group(1)}{m.group(2)}'
-
+        # 'DI27', 'DI_27', 'DI 27'
         m = _re.fullmatch(r'DI[_\s]?(\d{2})', s)
         if m:
             yy = m.group(1)
             return (f'DIF{yy}' if default_to_F else f'DIN{yy}')
-
+        # 'ODF26'/'ODN26'
         m = _re.fullmatch(r'OD(F|N)(\d{2})', s)
         if m:
             return f'DI{m.group(1)}{m.group(2)}'
-
         return None
 
     def _bucket_norm_series(s: pd.Series, default_to_F=True) -> pd.Series:
         return s.map(lambda z: _bucket_norm_one(z, default_to_F=default_to_F))
 
-    def _yy_from_bucket(b: str) -> int | None:
-        m = _re.search(r'(\d{2})$', str(b) if b is not None else '')
-        return int(m.group(1)) if m else None
-
-    def _year_to_bucket(year: int, prefer='F') -> str:
-        yy = int(year) % 100
-        return f'DI{"F" if prefer=="F" else "N"}{yy:02d}'
-
-    def _expand_df_di_to_cover(df_di: pd.DataFrame, needed_buckets: list[str]) -> pd.DataFrame:
-        """
-        Recebe df_di = ['DI_bucket','DV01_DI_R$/contrato'] e expande/interpola
-        para cobrir todos os buckets de `needed_buckets`. Faz ffill/bfill nas pontas.
-        Aplica a regra pós-2030: manter apenas DIF (F).
-        """
-        if df_di is None or df_di.empty:
-            return pd.DataFrame(columns=["DI_bucket","DV01_DI_R$/contrato"])
-
-        df = df_di.copy()
-        df['DI_bucket'] = _bucket_norm_series(df['DI_bucket'])
-        df['YY'] = df['DI_bucket'].map(_yy_from_bucket)
-        df = df.dropna(subset=['YY'])
-
-        out_parts = []
-        for is_f in [True, False]:
-            sub = df[df['DI_bucket'].str.contains(r'DIF') == is_f]
-            if sub.empty:
-                continue
-            s_sub = (sub.set_index('YY')['DV01_DI_R$/contrato']).sort_index()
-            needed = pd.Series(needed_buckets).pipe(_bucket_norm_series)
-            yy_needed = needed.map(_yy_from_bucket).dropna().astype(int)
-            if yy_needed.empty:
-                continue
-            idx_full = pd.Index(range(yy_needed.min(), yy_needed.max()+1), name='YY')
-            s_full = (s_sub.reindex(idx_full)
-                            .interpolate(method='index', limit_direction='both')
-                            .ffill().bfill())
-            tag = 'F' if is_f else 'N'
-            tmp = s_full.reset_index()
-            tmp['DI_bucket'] = tmp['YY'].map(lambda y: f"DI{tag}{int(y):02d}")
-            tmp.rename(columns={0:'DV01_DI_R$/contrato'}, inplace=True)
-            tmp['DV01_DI_R$/contrato'] = tmp['DV01_DI_R$/contrato'].values
-            out_parts.append(tmp[['DI_bucket','DV01_DI_R$/contrato']])
-
-        out = pd.concat(out_parts, ignore_index=True) if out_parts else df[['DI_bucket','DV01_DI_R$/contrato']]
-        # Pós-regra: para YY >= 31, manter apenas DIF
-        out = out[~(out['DI_bucket'].str.match(r"^DIN(\d{2})$") & (out['DI_bucket'].str[-2:].astype(int) >= 31))]
-        out['DI_bucket'] = _bucket_norm_series(out['DI_bucket'])
-        return out[['DI_bucket','DV01_DI_R$/contrato']]
-
-    def _nearest_bucket_from_target(base_date: pd.Timestamp, dur_years: float) -> tuple[pd.Timestamp, str]:
-        """
-        Converte duration (anos) -> data alvo (base + round(anos*365) dias) e escolhe o bucket mais próximo:
-        - DIF(y): ~01/y
-        - DIN(y): ~06/y (apenas yy<31)
-        - DIF(y+1)
-        Retorna (data_âncora_escolhida, 'DIFyy'/'DINyy').
-        """
-        try:
-            x = float(dur_years)
-        except Exception:
-            x = 0.0
-        if not np.isfinite(x) or x < 0:
-            x = 0.0
-
-        days = int(round(x * 365.0))
-        target = (pd.Timestamp(base_date) + pd.Timedelta(days=days)).normalize()
-        y = int(target.year)
-
-        jan_y  = pd.Timestamp(year=y, month=1, day=2)
-        jun_y  = pd.Timestamp(year=y, month=6, day=1)
-        jan_y1 = pd.Timestamp(year=y+1, month=1, day=2)
-
-        candidates = [
-            (jan_y,  f"DIF{y % 100:02d}", abs((target - jan_y).days)),
-            (jan_y1, f"DIF{(y+1) % 100:02d}", abs((target - jan_y1).days)),
-        ]
-        if (y % 100) < 31:
-            candidates.append((jun_y, f"DIN{y % 100:02d}", abs((target - jun_y).days)))
-
-        anchor_date, bucket, _ = min(candidates, key=lambda t: t[2])
-        return anchor_date, bucket
-
-    # ---------------------------
-    # 1) Sensibilidade dVP (delta) por fluxo (já usa df_base/df_bump)
-    # ---------------------------
-    base_g = (
-        df_base.groupby(["Codigo","Data_fim"], as_index=False)["VP_total"]
-        .sum().rename(columns={"VP_total":"VP_base"})
-    )
-    bump_g = (
-        df_bump.groupby(["Codigo","Data_fim"], as_index=False)["VP_total"]
-        .sum().rename(columns={"VP_total":"VP_bump"})
-    )
-    delta = base_g.merge(bump_g, on=["Codigo","Data_fim"], how="outer").fillna(0.0)
+    base_g = (df_base.groupby(["Codigo","Data_fim"], as_index=False)["VP_total"].sum().rename(columns={"VP_total":"VP_base"}))
+    bump_g = (df_bump.groupby(["Codigo","Data_fim"], as_index=False)["VP_total"].sum().rename(columns={"VP_total":"VP_bump"}))
+    delta = (base_g.merge(bump_g, on=["Codigo","Data_fim"], how="outer").fillna(0.0))
     delta["dVP"] = delta["VP_bump"] - delta["VP_base"]
+    delta["DI_bucket"] = pd.to_datetime(delta["Data_fim"]).map(lambda x: _bucket_label(x, use_underscore=False))
+    dv01_side = (delta.groupby(["DI_bucket","Codigo"], as_index=False)["dVP"].sum().rename(columns={"dVP":"DV01_R$/bp"}))
+    
+    
+    dv01_fundo_vert = (dv01_side.groupby("DI_bucket", as_index=False)["DV01_R$/bp"].sum().rename(columns={"DV01_R$/bp":"DV01_fundo_R$/bp"}))
+    
+    s_dv01_ctrt = _load_di_fut_dv01_series()
 
-    # Base auxiliar
-    df_ref = delta.copy()
-    df_ref['Data_fim'] = pd.to_datetime(df_ref['Data_fim'])
-    df_ref['Ano_Pgto'] = df_ref['Data_fim'].dt.year
-    df_ref['abs_dVP']  = df_ref['dVP'].abs()
-
-    # DV01 total por ativo
-    df_total_dv01 = (
-        df_ref.groupby('Codigo', as_index=False)['dVP']
-        .sum().rename(columns={'dVP': 'DV01_Total_Ativo'})
-    )
-
-    # Data-base para duration
-    try:
-        _base_dt_for_dur = base_dt.normalize()
-    except Exception:
-        _base_dt_for_dur = pd.to_datetime(REF_DATE_CURVA).normalize()
-
-    # ---------------------------
-    # 2) Monta os dois mapeamentos (CONSECUTIVO e DURATION)
-    # ---------------------------
-
-    # A) Consecutivo: ano de maior contribuição absoluta + 1 (sempre 'DIF')
-    dv01_por_ano = (df_ref.groupby(['Codigo','Ano_Pgto'], as_index=False)['abs_dVP'].sum())
-    idx_max = dv01_por_ano.groupby('Codigo')['abs_dVP'].idxmax()
-    df_ano_ref = (
-        dv01_por_ano.loc[idx_max, ['Codigo','Ano_Pgto']]
-        .rename(columns={'Ano_Pgto':'Ano_Referencia'})
-    )
-    df_consec = df_ano_ref.merge(df_total_dv01, on='Codigo', how='left')
-    df_consec['DI_bucket'] = df_consec['Ano_Referencia'].apply(lambda y: _year_to_bucket(int(y) + 1, prefer='F'))
-    agg_consec = (
-        df_consec.groupby('DI_bucket', as_index=False)['DV01_Total_Ativo']
-        .sum().rename(columns={'DV01_Total_Ativo':'DV01_Agregado_R$/bp'})
-    )
-
-    # B) Duration: calcula duration “no dia” e ancora
-    _df_dur_base = df_base.copy()
-    _df_dur_base['Data_fim'] = pd.to_datetime(_df_dur_base['Data_fim'])
-    _df_dur_base = _df_dur_base[_df_dur_base['Data_fim'] > _base_dt_for_dur]
-
-    if _df_dur_base.empty:
-        agg_dur = pd.DataFrame(columns=['DI_bucket','DV01_Agregado_R$/bp'])
-    else:
-        _df_dur_base['t_anos'] = (_df_dur_base['Data_fim'] - _base_dt_for_dur).dt.days / 365.25
-        _df_dur_base = _df_dur_base[_df_dur_base['t_anos'] > 0]
-
-        def _dur_macaulay(g: pd.DataFrame) -> float:
-            pv = g['VP_total'].to_numpy(dtype=float)
-            t  = g['t_anos'].to_numpy(dtype=float)
-            den = float(np.sum(pv))
-            if den <= 0 or not np.isfinite(den):
-                return 0.0
-            return float(np.sum(pv * t) / den)
-
-        dur_por_ativo = (
-            _df_dur_base.groupby('Codigo')
-            .apply(_dur_macaulay).rename('Duration_anos').reset_index()
-        )
-        tmp = dur_por_ativo['Duration_anos'].apply(lambda z: _nearest_bucket_from_target(_base_dt_for_dur, z))
-        dur_por_ativo['Hedge_Bucket_Duration'] = tmp.map(lambda t: t[1])
-
-        df_dur = dur_por_ativo.merge(df_total_dv01, on='Codigo', how='left')
-        agg_dur = (
-            df_dur.groupby('Hedge_Bucket_Duration', as_index=False)['DV01_Total_Ativo']
-            .sum().rename(columns={'Hedge_Bucket_Duration':'DI_bucket',
-                                'DV01_Total_Ativo':'DV01_Agregado_R$/bp'})
-        )
-
-    # Normaliza buckets
-    agg_consec['DI_bucket'] = _bucket_norm_series(agg_consec['DI_bucket'])
-    agg_dur['DI_bucket']    = _bucket_norm_series(agg_dur['DI_bucket'])
-
-    # ---------------------------
-    # 3) DV01 por contrato — cobrindo buckets necessários
-    # ---------------------------
-    s_dv01_ctrt = _load_di_fut_dv01_series()  # Series index=DI_bucket, value=DV01_DI_R$/contrato
     if s_dv01_ctrt.empty:
-        df_di = pd.DataFrame(columns=["DI_bucket","DV01_DI_R$/contrato"])
+        st.warning("DV01 dos contratos de DI não carregado. Coluna de contratos teóricos não será calculada.")
+        df_di = pd.DataFrame({"DI_bucket": dv01_fundo_vert["DI_bucket"], "DV01_DI_R$/contrato": np.nan})
     else:
         df_di = s_dv01_ctrt.reset_index()
         df_di.columns = ["DI_bucket", "DV01_DI_R$/contrato"]
-    df_di['DI_bucket'] = _bucket_norm_series(df_di['DI_bucket'])
 
-    # ---------------------------
-    # 4) Posições atuais (rel_df / sel_fundo) -> s_posicoes_atuais (por DI_bucket)
-    # ---------------------------
-    def _extrair_qtd_hedge(texto: str) -> int:
-        if not isinstance(texto, str): return 0
-        m = _re.search(r"Hedge DI\s*\(\s*(-?\d+)\s*\)", texto)
-        return int(m.group(1)) if m else 0
+    # NORMALIZAÇÃO CONSISTENTE (sempre DIF/DIN)
+    dv01_fundo_vert["DI_bucket"] = _bucket_norm_series(dv01_fundo_vert["DI_bucket"], default_to_F=True)
+    df_di["DI_bucket"]           = _bucket_norm_series(df_di["DI_bucket"],           default_to_F=True)
 
-    def _extrair_bucket_ativo(ativo: str) -> str | None:
-        """
-        'DI1JAN27' -> 'DIF27'
-        'DI1JUN27' -> 'DIN27'
-        'ODF26'/'ODN26' idem
-        """
-        if not isinstance(ativo, str):
-            return None
-        s = ativo.strip().upper().replace(" ", "")
+    # limpa None
+    dv01_fundo_vert = dv01_fundo_vert.dropna(subset=["DI_bucket"])
+    df_di           = df_di.dropna(subset=["DI_bucket"])
 
-        m = _re.search(r"^DI1(JAN|JUN)(\d{2})$", s)
-        if m:
-            mon, yy = m.group(1), int(m.group(2))
-            return f"DI{'F' if mon=='JAN' else 'N'}{yy:02d}"
+    res_vert = dv01_fundo_vert.merge(df_di, on="DI_bucket", how="left")
+    dv01_contrato = res_vert["DV01_DI_R$/contrato"]
+    res_vert["Contratos_teoricos"] = np.where(
+        dv01_contrato.notna() & (dv01_contrato != 0),
+        (res_vert["DV01_fundo_R$/bp"] / dv01_contrato).round(0),
+        0
+    ).astype(int)
+   
+    with st.expander(" Análise de Sensibilidade: DV01 por Ativo x Vértice"):
+        if dv01_side.empty:
+            st.info("Nenhum dado de sensibilidade para exibir.")
+        else:
+            # Cria as abas para as duas visualizações
+            tab_dv01, tab_contratos = st.tabs(["DV01 (R$ por bp)", "Nº Contratos para Hedge"])
+            
+            # Transforma a tabela para o formato Ativo x Vértice
+            dv01_pivot = dv01_side.pivot_table(
+                index="Codigo", 
+                columns="DI_bucket", 
+                values="DV01_R$/bp",
+                fill_value=0.0
+            )
+            # Adiciona um total por ativo
+            dv01_pivot['Total'] = dv01_pivot.sum(axis=1)
+            
+            # Função de estilo para zerar os zeros (reutilizada em ambas as abas)
+            def highlight_zeros(s):
+                if s.name == 'Total': return ['' for _ in s]
+                return ['background-color: #31333F' if v == 0 else '' for v in s]
 
-        m2 = _re.search(r"^OD([FN])(\d{2})$", s)
-        if m2:
-            fn, yy = m2.group(1), int(m2.group(2))
-            return f"DI{'F' if fn=='F' else 'N'}{yy:02d}"
+            # --- Aba 1: Heatmap de DV01 (em R$) ---
+            with tab_dv01:
+                styler_dv01 = (dv01_pivot.sort_values("Total")
+                               .style
+                               .format("{:,.2f}")
+                               .background_gradient(cmap='RdYlGn', axis=1, subset=dv01_pivot.columns[:-1])
+                               .apply(highlight_zeros, axis=0))
 
-        return None
+                st.dataframe(
+                    styler_dv01,
+                    use_container_width=True
+                )
+            
+            # --- Aba 2: Heatmap de Nº de Contratos ---
+            with tab_contratos:
+                # Verifica se temos os dados de DV01 por contrato para fazer a divisão
+                if 'df_di' in locals() and not df_di.empty:
+                    # Cria uma série para facilitar a divisão: index=DI_bucket, value=DV01_DI_R$/contrato
+                    s_dv01_contrato = df_di.set_index('DI_bucket')['DV01_DI_R$/contrato']
+                    
+                    # Prepara o dataframe para o cálculo (sem a coluna Total)
+                    dv01_para_calc = dv01_pivot.drop(columns='Total')
+                    dv01_para_calc.columns = _norm_bucket(pd.Index(dv01_para_calc.columns))
+                    s_dv01_contrato = df_di.set_index('DI_bucket')['DV01_DI_R$/contrato']
+                    s_dv01_contrato.index = _norm_bucket(s_dv01_contrato.index.to_series())
 
+                    s_dv01_contrato = s_dv01_contrato.reindex(dv01_para_calc.columns)
+                    contratos_pivot = dv01_para_calc.div(s_dv01_contrato, axis=1).fillna(0.0)
+
+                    contratos_pivot.fillna(0.0, inplace=True) # Trata casos onde o DV01 do contrato é 0 ou NaN
+                    
+                    # Adiciona a coluna de Total de contratos por ativo
+                    contratos_pivot['Total'] = contratos_pivot.sum(axis=1)
+
+                    # Aplica o mesmo estilo visual, mas com formatação para números inteiros
+                    styler_contratos = (contratos_pivot.sort_values("Total")
+                                        .style
+                                        .format("{:,.0f}") # Formata como inteiro
+                                        .background_gradient(cmap='RdYlGn', axis=1, subset=contratos_pivot.columns[:-1])
+                                        .apply(highlight_zeros, axis=0))
+
+                    st.dataframe(
+                        styler_contratos,
+                        use_container_width=True
+                    )
+                else:
+                    st.warning("Dados de DV01 por contrato de DI não estão disponíveis para calcular o hedge em nº de contratos.")
+
+
+    #st.markdown("#### Posições Atuais em Contratos DI (Estratégia 'Hedge DI')")
+    
     try:
+        # ### ALTERAÇÃO AQUI ###
+        # 1. Filtra o DataFrame `rel_df` pela estratégia E PELO FUNDO SELECIONADO
         filtro_estrategia = rel_df['Estratégia'].str.contains("Hedge DI", na=False)
         filtro_fundo = rel_df['Fundo'] == sel_fundo
         df_di_raw = rel_df[filtro_estrategia & filtro_fundo].copy()
 
+        # 2. Funções de parsing com regex
+        def extrair_qtd_hedge(texto: str) -> int:
+            """Extrai a quantidade de contratos de 'Hedge DI (XX)'."""
+            if not isinstance(texto, str): return 0
+            match = re.search(r"Hedge DI\s*\(\s*(-?\d+)\s*\)", texto)
+            return int(match.group(1)) if match else 0
+
+        def extrair_info_ativo(ativo: str) -> tuple:
+            """
+            Extrai Mês/ano e retorna o bucket DIF/DIN.
+            Exemplos:
+            'DI1JAN27' -> ('JAN', 27, 'DIF27')
+            'DI1JUN27' -> ('JUN', 27, 'DIN27')
+            'ODF26'    -> ('JAN', 26, 'DIF26')
+            'ODN26'    -> ('JUN', 26, 'DIN26')
+            """
+            if not isinstance(ativo, str):
+                return None, None, None
+            s = ativo.strip().upper().replace(" ", "")
+
+            m = re.search(r"^DI1(JAN|JUN)(\d{2})$", s)
+            if m:
+                mon, yy = m.group(1), int(m.group(2))
+                bucket = f"DI{'F' if mon=='JAN' else 'N'}{yy:02d}"
+                return mon, yy, bucket
+
+            m2 = re.search(r"^OD([FN])(\d{2})$", s)
+            if m2:
+                fn, yy = m2.group(1), int(m2.group(2))
+                bucket = f"DI{'F' if fn=='F' else 'N'}{yy:02d}"
+                mon = 'JAN' if fn == 'F' else 'JUN'
+                return mon, yy, bucket
+
+            # fallback
+            return None, None, None
+
+
         if df_di_raw.empty:
-            s_posicoes_atuais = pd.Series(dtype=int)
+            #st.info(f"Nenhuma posição com a estratégia 'Hedge DI' encontrada para o fundo '{sel_fundo}'.")
+            # Cria uma coluna vazia se não houver posições para evitar erros no merge
+            res_vert['Contratos_atuais'] = 0
         else:
-            df_di_raw['Quantidade_Hedge'] = df_di_raw['Estratégia'].apply(_extrair_qtd_hedge)
-            df_di_raw['DI_bucket'] = df_di_raw['Ativo'].apply(_extrair_bucket_ativo)
-            df_di_pos = df_di_raw.dropna(subset=['DI_bucket'])
+            # 3. Aplica as funções para criar novas colunas
+            df_di_raw['Quantidade_Hedge'] = df_di_raw['Estratégia'].apply(extrair_qtd_hedge)
+            
+            # Extrai Mês, Ano e cria o Bucket para o merge
+            ativo_info = df_di_raw['Ativo'].apply(extrair_info_ativo).apply(pd.Series)
+            ativo_info.columns = ['Mes', 'Ano', 'DI_bucket']
+            df_di_pos = pd.concat([df_di_raw, ativo_info], axis=1)
+
+            # Filtra apenas as linhas onde a extração foi bem-sucedida
+            df_di_pos.dropna(subset=['DI_bucket', 'Quantidade_Hedge'], inplace=True)
+            
+            # Exibe uma tabela de verificação para o usuário
+            #st.write("Posições extraídas da base para este fundo:")
+            #st.dataframe(
+            #    df_di_pos[['Ativo', 'Estratégia', 'Quantidade_Hedge', 'Mes', 'DI_bucket']].style.format({'Quantidade_Hedge': '{:,.0f}'}),
+            #    use_container_width=True
+            #)
+
+            # 4. Agrega as quantidades por bucket
             s_posicoes_atuais = df_di_pos.groupby('DI_bucket')['Quantidade_Hedge'].sum()
-            s_posicoes_atuais.index = _bucket_norm_series(pd.Index(s_posicoes_atuais.index))
+
+            # 5. Juntar com a tabela de resultados
+            res_vert = res_vert.merge(s_posicoes_atuais.rename('Contratos_atuais'), on='DI_bucket', how='left')
+            res_vert['Contratos_atuais'].fillna(0, inplace=True)
+            res_vert['Contratos_atuais'] = res_vert['Contratos_atuais'].astype(int)
+
+        # 6. Calcula a diferença para o hedge ideal
+        res_vert["Hedge_necessario"] = res_vert["Contratos_teoricos"] - res_vert.get("Contratos_atuais", 0)
+
     except NameError:
-        st.warning("`rel_df`/`sel_fundo` não encontrados — não foi possível carregar as posições atuais.")
-        s_posicoes_atuais = pd.Series(dtype=int)
+        st.warning("A variável `rel_df` não foi encontrada. Não foi possível carregar as posições atuais de DI.")
+        res_vert["Contratos_atuais"] = 0
+        res_vert["Hedge_necessario"] = res_vert["Contratos_teoricos"]
+    except Exception as e:
+        st.error(f"Ocorreu um erro ao processar `rel_df`: {e}")
+        res_vert["Contratos_atuais"] = "Erro"
+        res_vert["Hedge_necessario"] = "Erro"
 
-    # ---------------------------
-    # 5) UI: escolha um único método para exibir (uma única tabela)
-    # ---------------------------
-    #st.sidebar.markdown("---")
-    #metodo = st.sidebar.radio(
-    #    "## Método de mapeamento do hedge:",
-    #    options=("Consecutivo (ano+1)", "Por Duration"),
-    #    horizontal=True,index=1
-    #)
-    metodo = "Por Duration"
 
-    agg_escolhido = agg_consec if metodo.startswith("Consecutivo") else agg_dur
-    
-    MERGE_BUCKETS = {"DIF26": "DIN26"}   # você pode adicionar mais pares aqui
 
-    def _apply_bucket_merges(df: pd.DataFrame, merge_map: dict[str, str], value_col: str) -> pd.DataFrame:
-        """Soma df[value_col] dos buckets 'src' nos 'dst' e zera os 'src'."""
-        if df is None or df.empty or value_col not in df.columns:
-            return df
-        df = df.copy()
-        df['DI_bucket'] = df['DI_bucket'].astype(str)
-        for src, dst in merge_map.items():
-            src_val = df.loc[df['DI_bucket'] == src, value_col].sum()
-            if src_val != 0:
-                if (df['DI_bucket'] == dst).any():
-                    df.loc[df['DI_bucket'] == dst, value_col] = df.loc[df['DI_bucket'] == dst, value_col].fillna(0.0) + src_val
-                else:
-                    df = pd.concat([df, pd.DataFrame([{'DI_bucket': dst, value_col: src_val}])], ignore_index=True)
-                # Zera o src (mantemos a linha por enquanto; podemos ocultar depois)
-                df.loc[df['DI_bucket'] == src, value_col] = 0.0
-        return df
+    st.markdown("### Contratos de DI por Vértice")
+    # Garante que as colunas existam antes de formatar
+    colunas_finais = ["DI_bucket", "DV01_fundo_R$/bp", "DV01_DI_R$/contrato", "Contratos_teoricos", "Contratos_atuais", "Hedge_necessario"]
+    for col in colunas_finais:
+        if col not in res_vert.columns:
+            res_vert[col] = 0 # ou np.nan
 
-    # 1) Aplique na visão principal (Duration / Consecutivo) ANTES de calcular contratos teóricos
-    agg_escolhido = _apply_bucket_merges(agg_escolhido, MERGE_BUCKETS, value_col='DV01_Agregado_R$/bp')
-
-    agg_escolhido = agg_escolhido.copy()
-    agg_escolhido['DI_bucket'] = _bucket_norm_series(agg_escolhido['DI_bucket'])
-
-    # Precisamos cobrir todos os vértices relevantes:
-    #  - Do agregado escolhido
-    #  - Dos DV01 por contrato (para cálculo)
-    #  - E TODOS os que têm Contratos Atuais (exigência do usuário)
-    buckets_needed = pd.Index(
-        sorted(set(agg_escolhido['DI_bucket'].dropna().tolist())
-            | set(df_di['DI_bucket'].dropna().tolist())
-            | set(s_posicoes_atuais.index.tolist()))
+    st.dataframe(
+        res_vert[colunas_finais].sort_values("DI_bucket").style.format({
+            "DV01_fundo_R$/bp": "{:,.2f}",
+            "DV01_DI_R$/contrato": "{:,.2f}",
+            "Contratos_teoricos": "{:,.0f}",
+            "Contratos_atuais": "{:,.0f}",
+            "Hedge_necessario": "{:,.0f}",
+        }),
+        use_container_width=True
     )
 
-    # Expande df_di para cobrir todos os buckets necessários
-    df_di_use = _expand_df_di_to_cover(df_di, buckets_needed.tolist()) if not buckets_needed.empty else df_di.copy()
-
-    # Monta a tabela final única
-    out = pd.DataFrame({'DI_bucket': buckets_needed})
-    out = out.merge(agg_escolhido.rename(columns={'DV01_Agregado_R$/bp':'DV01_Agregado_R$/bp'}),
-                    on='DI_bucket', how='left')
-    out = out.merge(df_di_use, on='DI_bucket', how='left')
-
-    # Preenche NaN e calcula contratos teóricos
-    for c in ['DV01_Agregado_R$/bp', 'DV01_DI_R$/contrato']:
-        if c not in out.columns:
-            out[c] = np.nan
-    dv01_ctrt = out['DV01_DI_R$/contrato']
-    out['Contratos_teoricos'] = np.where(
-        dv01_ctrt.notna() & (dv01_ctrt != 0),
-        (out['DV01_Agregado_R$/bp'].fillna(0.0) / dv01_ctrt).round(0),
-        0
-    ).astype(int)
-
-    # Junta posições atuais (garantindo aparecer TODOS os vértices com posição)
-    if s_posicoes_atuais is not None and not s_posicoes_atuais.empty:
-        out = out.merge(s_posicoes_atuais.rename('Contratos_atuais').reset_index(),
-                        on='DI_bucket', how='left')
-    else:
-        out['Contratos_atuais'] = 0
-    out['Contratos_atuais'] = out['Contratos_atuais'].fillna(0).astype(int)
-
-    # Hedge necessário
-    out['Hedge_necessario'] = out['Contratos_teoricos'] - out['Contratos_atuais']
-
-    # Ordena por bucket (YY) e formata
-    def _sort_key_bucket(s):
-        yy = pd.to_numeric(s.str[-2:], errors='coerce')
-        is_n = s.str.contains('DIN')
-        # Ordena por ano e põe DIF antes de DIN no mesmo ano
-        return pd.MultiIndex.from_arrays([yy, is_n])
-
-    _out_yy = pd.to_numeric(out['DI_bucket'].astype(str).str[-2:], errors='coerce').fillna(-1).astype(int)
-    _out_is_n = out['DI_bucket'].astype(str).str.contains('DIN', na=False).astype(int)  # DIF=0, DIN=1
-
-    out = (
-        out.assign(_yy=_out_yy, _is_n=_out_is_n)
-        .sort_values(['_yy', '_is_n', 'DI_bucket'])
-        .drop(columns=['_yy', '_is_n'])
-    )
-    out2 = out.copy()
-    out2['YY']  = pd.to_numeric(out2['DI_bucket'].astype(str).str[-2:], errors='coerce').fillna(-1).astype(int)
-    out2['SEM'] = out2['DI_bucket'].astype(str).str.contains('DIN', na=False).astype(int)  # DIF=0, DIN=1
-    out2 = out2.sort_values(['YY','SEM','DI_bucket']).drop(columns=['YY','SEM']).reset_index(drop=True)
-
-    def _op_label(v):
-        try:
-            n = int(-v)
-        except Exception:
-            return ""
-        if n > 0:  return f"Comprar {n}"
-        if n < 0:  return f"Vender {abs(n)}"
-        return "OK"
-
-    out2['Operação(Taxa)'] = out2['Hedge_necessario'].apply(_op_label)
-
-    def _fmt_2(x):
-        if pd.isna(x): return "–"
-        try:
-            xf = float(x)
-            if abs(xf) < 1e-15: return "–"
-            return f"{xf:,.2f}"
-        except Exception:
-            return str(x)
-
-    def _fmt_0(x):
-        if pd.isna(x): return "–"
-        try:
-            xi = int(x)
-            if xi == 0: return "–"
-            return f"{xi:,.0f}"
-        except Exception:
-            return str(x)
-
-    def _row_highlight(row):
-        try:
-            n = int(row['Hedge_necessario'])
-        except Exception:
-            n = 0
-        if n == 0:
-            return [''] * len(row)
-        return (['background-color: #e6f4ea; color: #137333; font-weight: 600;'] * len(row)
-                if n < 0 else
-                ['background-color: #fde8e8; color: #b00020; font-weight: 600;'] * len(row))
-
-    cols_show = [
-        'DI_bucket',
-        'DV01_Agregado_R$/bp',
-        'DV01_DI_R$/contrato',
-        'Contratos_teoricos',
-        'Contratos_atuais',
-        'Hedge_necessario',
-        'Operação(Taxa)',
-    ]
-
-    styler = (
-        out2[cols_show]
-        .style
-        .format({
-            'DV01_Agregado_R$/bp': _fmt_2,
-            'DV01_DI_R$/contrato': _fmt_2,
-            'Contratos_teoricos':  _fmt_0,
-            'Contratos_atuais':    _fmt_0,
-            'Hedge_necessario':    _fmt_0,
-        })
-        .apply(_row_highlight, axis=1)
-        # Bordas + centralização (th e td)
-        .set_table_styles([
-            {'selector': 'th',               'props': 'border: 1px solid #444; padding: 6px; text-align: center; font-weight: 700;'},
-            {'selector': 'thead th',         'props': 'text-align: center;'},
-            {'selector': 'th.col_heading',   'props': 'text-align: center;'},
-            {'selector': 'td',               'props': 'border: 1px solid #444; padding: 6px; text-align: center; vertical-align: middle;'},
-            {'selector': 'tbody td',         'props': 'text-align: center; vertical-align: middle;'},
-        ])
-        # fallback extra para alinhar todas as células ao centro
-        .set_properties(**{'text-align': 'center', 'vertical-align': 'middle'})
-        .hide(axis='index')
-    )
-
-    # Se sua versão do Streamlit não centralizar com st.dataframe, use st.table(styler).
-    st.table(styler)
-
-    st.markdown("#### Ativos — Duration, Bucket e Contratos (teóricos)")
-    # Garantir df_dur (já calculado na seção acima). Se não existir, recalcula rápido.
-    if 'df_dur' not in locals():
-        _df_dur_base2 = df_base.copy()
-        _df_dur_base2['Data_fim'] = pd.to_datetime(_df_dur_base2['Data_fim'])
-        _df_dur_base2 = _df_dur_base2[_df_dur_base2['Data_fim'] > _base_dt_for_dur]
-        if _df_dur_base2.empty:
-            df_dur = pd.DataFrame(columns=['Codigo','Duration_anos','Hedge_Bucket_Duration'])
+    # ### NOVO: Expander com hedge por "Vértice Consecutivo" e por "Duration" ###
+    with st.expander(" Análise Alternativa: Hedge por Ano de Referência (Consecutivo vs Duration)"):
+        # 'delta' já foi calculado mais acima: contém dVP (DV01) por fluxo e Data_fim
+        if 'delta' not in locals() or delta.empty:
+            st.info("Dados de fluxo insuficientes para calcular o hedge por referência.")
         else:
-            _df_dur_base2['t_anos'] = (_df_dur_base2['Data_fim'] - _base_dt_for_dur).dt.days / 365.25
-            _df_dur_base2 = _df_dur_base2[_df_dur_base2['t_anos'] > 0]
+            # ---------------------------
+            # Funções auxiliares
+            # ---------------------------
+            import re as _re
 
-            def _dur_macaulay2(g: pd.DataFrame) -> float:
-                pv = g['VP_total'].to_numpy(dtype=float)
-                t  = g['t_anos'].to_numpy(dtype=float)
-                den = float(np.sum(pv))
-                if den <= 0 or not np.isfinite(den): return 0.0
-                return float(np.sum(pv * t) / den)
+            def _norm_bucket(s: pd.Series) -> pd.Series:
+                # força DIF/DIN (default F quando vier 'DIyy' puro)
+                return _bucket_norm_series(s, default_to_F=True)
 
-            _dur_por_ativo2 = (
-                _df_dur_base2.groupby('Codigo')
-                .apply(_dur_macaulay2).rename('Duration_anos').reset_index()
+            def _yy_from_bucket(b: str) -> int | None:
+                m = _re.search(r'(\d{2})$', str(b) if b is not None else '')
+                return int(m.group(1)) if m else None
+
+            def _year_to_bucket(year: int, prefer='F') -> str:
+                yy = int(year) % 100
+                return f'DI{"F" if prefer=="F" else "N"}{yy:02d}'
+
+            def _expand_df_di_to_cover(df_di: pd.DataFrame, needed_buckets: list[str]) -> pd.DataFrame:
+                """
+                Recebe df_di = ['DI_bucket','DV01_DI_R$/contrato'] com DI26..DI35 e
+                expande/interpola para cobrir todos os buckets de `needed_buckets`.
+                Faz forward/backward fill nas pontas.
+                """
+                if df_di is None or df_di.empty:
+                    return pd.DataFrame(columns=["DI_bucket","DV01_DI_R$/contrato"])
+
+                df = df_di.copy()
+                df['DI_bucket'] = _norm_bucket(df['DI_bucket'])
+                df['YY'] = df['DI_bucket'].map(_yy_from_bucket)
+                df = df.dropna(subset=['YY'])
+                s = df.groupby('YY')['DV01_DI_R$/contrato'].mean().sort_index()
+
+                # range necessário
+                needed = pd.Series(needed_buckets).pipe(_norm_bucket)
+                yy_needed = [y for y in (needed.map(_yy_from_bucket).dropna().astype(int).tolist())]
+                if not yy_needed:
+                    return df[['DI_bucket','DV01_DI_R$/contrato']].drop_duplicates()
+
+                # Queremos dois conjuntos: F e N (quando existir)
+                df = df.copy()
+                df['IS_F'] = df['DI_bucket'].str.contains(r"DIF")
+
+                # Interpola separadamente por F e N para evitar "contaminar" um semestre com o outro
+                out_parts = []
+                for is_f in [True, False]:
+                    sub = df[df['IS_F'] == is_f]
+                    if sub.empty:
+                        continue
+                    s_sub = (sub.set_index('YY')['DV01_DI_R$/contrato']
+                                .sort_index())
+                    idx_full = pd.Index(range(min(yy_needed), max(yy_needed)+1), name='YY')
+                    s_full = (s_sub.reindex(idx_full)
+                                    .interpolate(method='index', limit_direction='both')
+                                    .ffill().bfill())
+                    tag = 'F' if is_f else 'N'
+                    tmp = s_full.reset_index()
+                    tmp['DI_bucket'] = tmp['YY'].map(lambda y: f"DI{tag}{int(y):02d}")
+                    tmp.rename(columns={0:'DV01_DI_R$/contrato'}, inplace=True)
+                    tmp['DV01_DI_R$/contrato'] = tmp['DV01_DI_R$/contrato'].values
+                    out_parts.append(tmp[['DI_bucket','DV01_DI_R$/contrato']])
+
+                out = pd.concat(out_parts, ignore_index=True) if out_parts else df[['DI_bucket','DV01_DI_R$/contrato']]
+                # Pós-regra: para YY >= 31, manter apenas DIF
+                out = out[~(out['DI_bucket'].str.match(r"^DIN(\d{2})$") & (out['DI_bucket'].str[-2:].astype(int) >= 31))]
+                return out[['DI_bucket','DV01_DI_R$/contrato']]
+
+            # ---------------------------
+            # Base comum a ambos métodos
+            # ---------------------------
+            df_ref = delta.copy()
+            df_ref['Data_fim'] = pd.to_datetime(df_ref['Data_fim'])
+            df_ref['Ano_Pgto'] = df_ref['Data_fim'].dt.year
+            df_ref['abs_dVP']  = df_ref['dVP'].abs()
+
+            # DV01 total por ativo
+            df_total_dv01 = (df_ref.groupby('Codigo', as_index=False)['dVP']
+                            .sum().rename(columns={'dVP': 'DV01_Total_Ativo'}))
+
+            # Data base para duration
+            try:
+                _base_dt_for_dur = base_dt.normalize()
+            except Exception:
+                _base_dt_for_dur = pd.to_datetime(REF_DATE_CURVA).normalize()
+
+            # =========================
+            # Método A) Vértice consecutivo
+            # =========================
+            dv01_por_ano = (df_ref.groupby(['Codigo','Ano_Pgto'], as_index=False)['abs_dVP'].sum())
+            idx_max = dv01_por_ano.groupby('Codigo')['abs_dVP'].idxmax()
+            df_ano_ref = (dv01_por_ano.loc[idx_max, ['Codigo','Ano_Pgto']]
+                        .rename(columns={'Ano_Pgto':'Ano_Referencia'}))
+
+            df_consec = df_ano_ref.merge(df_total_dv01, on='Codigo', how='left')
+            df_consec['Hedge_Bucket_Consecutivo'] = df_consec['Ano_Referencia'].apply(
+                lambda y: _year_to_bucket(int(y) + 1, prefer='F')  # sempre janeiro do ano seguinte
             )
-            _tmp2 = _dur_por_ativo2['Duration_anos'].apply(lambda z: _nearest_bucket_from_target(_base_dt_for_dur, z))
-            _dur_por_ativo2['Hedge_Bucket_Duration'] = _tmp2.map(lambda t: t[1])
-            df_dur = _dur_por_ativo2
 
-    # Monta base por ativo
-    df_assets = (
-        df_dur[['Codigo','Duration_anos','Hedge_Bucket_Duration']]
-        .merge(df_total_dv01, on='Codigo', how='left')  # DV01_Total_Ativo
-    )
-    df_assets.rename(columns={'Hedge_Bucket_Duration':'DI_bucket'}, inplace=True)
-    df_assets['DI_bucket'] = _bucket_norm_series(df_assets['DI_bucket'])
-
-    # DV01 por contrato via bucket do ativo (usar df_di_use que já cobre todos os buckets necessários)
-    if 'df_di_use' not in locals() or df_di_use is None or df_di_use.empty:
-        _df_di_for_join = df_di.copy() if 'df_di' in locals() else pd.DataFrame(columns=['DI_bucket','DV01_DI_R$/contrato'])
-    else:
-        _df_di_for_join = df_di_use.copy()
-
-    df_assets = df_assets.merge(_df_di_for_join, on='DI_bucket', how='left')
-
-    # Contratos teóricos por ativo = round(DV01_Total_Ativo / DV01_DI_R$/contrato)
-    dv01_ctrt_a = df_assets['DV01_DI_R$/contrato']
-    df_assets['Contratos_teoricos'] = np.where(
-        dv01_ctrt_a.notna() & (dv01_ctrt_a != 0),
-        (df_assets['DV01_Total_Ativo'].fillna(0.0) / dv01_ctrt_a).round(0),
-        0
-    ).astype(int)
-
-    # Ordena: por bucket (DIF antes de DIN) e dentro do bucket por |DV01| desc
-    df_assets['YY']  = pd.to_numeric(df_assets['DI_bucket'].astype(str).str[-2:], errors='coerce').fillna(-1).astype(int)
-    df_assets['SEM'] = df_assets['DI_bucket'].astype(str).str.contains('DIN', na=False).astype(int)
-    df_assets['ABS_DV01'] = df_assets['DV01_Total_Ativo'].abs()
-    df_assets = (
-        df_assets.sort_values(['YY','SEM','ABS_DV01'], ascending=[True, True, False])
-                .drop(columns=['YY','SEM','ABS_DV01'])
-                .reset_index(drop=True)
-    )
-
-    # Coluna de Operação(Taxa) teórica por ativo (sinal do DV01_Total_Ativo define direção)
-    def _op_label_asset(v):
-        try:
-            n = int(-v)
-        except Exception:
-            return ""
-        if n > 0:  return f"Comprar {n}"
-        if n < 0:  return f"Vender {abs(n)}"
-        return "OK"
-
-    df_assets['Operação(Taxa)'] = df_assets['Contratos_teoricos'].apply(_op_label_asset)
-
-    # Highlight linhas com contratos ≠ 0
-    def _row_highlight_assets(row):
-        try:
-            n = int(row['Contratos_teoricos'])
-        except Exception:
-            n = 0
-        if n == 0:
-            return [''] * len(row)
-        return (['background-color: #e6f4ea; color: #137333; font-weight: 600;'] * len(row)
-                if n < 0 else
-                ['background-color: #fde8e8; color: #b00020; font-weight: 600;'] * len(row))
-
-    cols_assets = [
-        'Codigo',
-        'Duration_anos',
-        'DI_bucket',
-        'DV01_Total_Ativo',
-        'DV01_DI_R$/contrato',
-        'Contratos_teoricos',
-        'Operação(Taxa)',
-    ]
-
-    styler_assets = (
-        df_assets[cols_assets]
-        .style
-        .format({
-            'Duration_anos':        _fmt_2,   # 2 casas, 0/NaN -> "–"
-            'DV01_Total_Ativo':     _fmt_2,
-            'DV01_DI_R$/contrato':  _fmt_2,
-            'Contratos_teoricos':   _fmt_0,   # inteiro, 0/NaN -> "–"
-        })
-        .apply(_row_highlight_assets, axis=1)
-        .set_table_styles([
-            {'selector': 'th',               'props': 'border: 1px solid #444; padding: 6px; text-align: center; font-weight: 700;'},
-            {'selector': 'thead th',         'props': 'text-align: center;'},
-            {'selector': 'th.col_heading',   'props': 'text-align: center;'},
-            {'selector': 'td',               'props': 'border: 1px solid #444; padding: 6px; text-align: center; vertical-align: middle;'},
-            {'selector': 'tbody td',         'props': 'text-align: center; vertical-align: middle;'},
-        ])
-        .set_properties(**{'text-align': 'center', 'vertical-align': 'middle'})
-        .hide(axis='index')
-    )
-
-    st.table(styler_assets)
-    # ===================== ANÁLISE ALTERNATIVA (ANTIGO "Hedge por Vértice / Key-Rate") =====================
-    with st.expander("Análise Alternativa — Sensibilidade por Vértice (Key-Rate DV01)", expanded=False):
-        # Bucketing calendário → DI buckets para a visão key-rate
-        def _bucket_label(dt) -> str | None:
-            if pd.isna(dt):
-                return None
-            d = pd.Timestamp(dt).normalize()
-            y = d.year
-            jan_y  = pd.Timestamp(year=y, month=1, day=2)
-            jun_y  = pd.Timestamp(year=y, month=6, day=1)
-            dist_jan = abs((d - jan_y).days)
-            dist_jun = abs((d - jun_y).days)
-            bucket = f"DIF{y%100:02d}" if dist_jan <= dist_jun else f"DIN{y%100:02d}"
-            if d.month >= 10:
-                bucket = f"DIF{(y + 1) % 100:02d}"
-            yy = int(bucket[-2:])
-            if yy >= 31:
-                bucket = f"DIF{yy:02d}"
-            return bucket
-
-        # dVP por ativo x vértice
-        dv01_side = delta.copy()
-        dv01_side["DI_bucket"] = pd.to_datetime(dv01_side["Data_fim"]).map(_bucket_label)
-        dv01_side = (dv01_side.groupby(["Codigo","DI_bucket"], as_index=False)["dVP"]
-                    .sum().rename(columns={"dVP":"DV01_R$/bp"}))
-        dv01_side["DI_bucket"] = _bucket_norm_series(dv01_side["DI_bucket"])
-
-        if dv01_side.empty:
-            st.info("Nenhum dado de sensibilidade para exibir.")
-        else:
-            # Pivot único (uma única tabela nesta visão alternativa)
-            dv01_pivot = dv01_side.pivot_table(
-                index="Codigo",
-                columns="DI_bucket",
-                values="DV01_R$/bp",
-                fill_value=0.0
-            )
-            dv01_pivot['Total'] = dv01_pivot.sum(axis=1)
-
-            def _highlight_zeros(s):
-                if s.name == 'Total': 
-                    return ['' for _ in s]
-                return ['background-color: #31333F' if v == 0 else '' for v in s]
-
+            st.markdown("##### Mapeamento (Consecutivo): Ativo → Vértice")
             st.dataframe(
-                (dv01_pivot.sort_values("Total")
-                        .style
-                        .format("{:,.2f}")
-                        .background_gradient(cmap='RdYlGn', axis=1, subset=dv01_pivot.columns[:-1])
-                        .apply(_highlight_zeros, axis=0)),
+                df_consec[['Codigo','Ano_Referencia','DV01_Total_Ativo','Hedge_Bucket_Consecutivo']]
+                .sort_values(['Hedge_Bucket_Consecutivo','Codigo'])
+                .style.format({'Ano_Referencia': '{:,.0f}', 'DV01_Total_Ativo': '{:,.2f}'}),
                 use_container_width=True
             )
 
+            agg_consec = (df_consec.groupby('Hedge_Bucket_Consecutivo', as_index=False)['DV01_Total_Ativo']
+                        .sum().rename(columns={'Hedge_Bucket_Consecutivo':'DI_bucket',
+                                                'DV01_Total_Ativo':'DV01_Agregado_R$/bp'}))
+
+            # =========================
+            # Método B) Por Duration
+            # =========================
+            
+            def _nearest_bucket_from_target(base_date: pd.Timestamp, dur_years: float) -> tuple[pd.Timestamp, str]:
+                """
+                Converte duration em anos -> data alvo (base + round(anos*365) dias) e
+                escolhe o bucket mais próximo entre:
+                - DIF(y): 01/y
+                - DIN(y): 06/y (apenas para yy<31)
+                - DIF(y+1): 01/(y+1)
+                Retorna (data_âncora_escolhida, 'DIFyy'/'DINyy').
+                """
+                try:
+                    x = float(dur_years)
+                except Exception:
+                    x = 0.0
+                if not np.isfinite(x) or x < 0:
+                    x = 0.0
+
+                # Data-alvo pela “regra simples”
+                days = int(round(x * 365.0))
+                target = (pd.Timestamp(base_date) + pd.Timedelta(days=days)).normalize()
+                y = int(target.year)
+
+                # Âncoras: Jan/y (DIFy), Jun/y (DINy se yy<31), Jan/(y+1) (DIFy+1)
+                jan_y  = pd.Timestamp(year=y, month=1, day=2)   # ~primeira sessão útil de jan
+                jun_y  = pd.Timestamp(year=y, month=6, day=1)   # ~início de jun
+                jan_y1 = pd.Timestamp(year=y+1, month=1, day=2)
+
+                candidates = [
+                    (jan_y,  f"DIF{y % 100:02d}", abs((target - jan_y).days)),
+                    (jan_y1, f"DIF{(y+1) % 100:02d}", abs((target - jan_y1).days)),
+                ]
+                if (y % 100) < 31:  # DIN só até 2030
+                    candidates.append((jun_y, f"DIN{y % 100:02d}", abs((target - jun_y).days)))
+
+                # Escolhe a âncora mais próxima
+                anchor_date, bucket, _ = min(candidates, key=lambda t: t[2])
+                return anchor_date, bucket
+
+
+            # 1) Base para duration: usa os fluxos do CENÁRIO BASE (df_base)
+            _df_dur_base = df_base.copy()
+            _df_dur_base['Data_fim'] = pd.to_datetime(_df_dur_base['Data_fim'])
+            _df_dur_base = _df_dur_base[_df_dur_base['Data_fim'] > base_dt]  # só fluxos futuros
+
+            if _df_dur_base.empty:
+                df_dur = pd.DataFrame(columns=[
+                    'Codigo','Duration_anos','Data_Alvo','Ano_Referencia_DUR','DV01_Total_Ativo','Hedge_Bucket_Duration'
+                ])
+                agg_dur = pd.DataFrame(columns=['DI_bucket','DV01_Agregado_R$/bp'])
+            else:
+                # 2) Tempo em anos a partir da base
+                _df_dur_base['t_anos'] = (_df_dur_base['Data_fim'] - base_dt).dt.days / 365.25
+                _df_dur_base = _df_dur_base[_df_dur_base['t_anos'] > 0]
+
+                # 3) Duration (Macaulay “no dia”): sum(PV * t) / sum(PV), por ativo
+                def _dur_macaulay(g: pd.DataFrame) -> float:
+                    pv = g['VP_total'].to_numpy(dtype=float)
+                    t  = g['t_anos'].to_numpy(dtype=float)
+                    den = float(np.sum(pv))
+                    if den <= 0 or not np.isfinite(den):
+                        return 0.0
+                    return float(np.sum(pv * t) / den)
+
+                dur_por_ativo = (
+                    _df_dur_base.groupby('Codigo')
+                    .apply(_dur_macaulay)
+                    .rename('Duration_anos')
+                    .reset_index()
+                )
+
+                # 4) Data alvo e bucket (regra simples das âncoras)
+                tmp = dur_por_ativo['Duration_anos'].apply(lambda z: _nearest_bucket_from_target(base_dt, z))
+                dur_por_ativo['Data_Alvo'] = tmp.map(lambda t: t[0])
+                dur_por_ativo['Hedge_Bucket_Duration'] = tmp.map(lambda t: t[1])
+                dur_por_ativo['Ano_Referencia_DUR'] = pd.to_datetime(dur_por_ativo['Data_Alvo']).dt.year
+
+                # 5) DV01 total por ativo (do delta já calculado)
+                df_total_dv01 = (
+                    df_ref.groupby('Codigo', as_index=False)['dVP']
+                    .sum()
+                    .rename(columns={'dVP': 'DV01_Total_Ativo'})
+                )
+
+                df_dur = dur_por_ativo.merge(df_total_dv01, on='Codigo', how='left')
+
+                st.markdown("##### Mapeamento (Duration): Ativo → Vértice (âncoras 01/yy, 06/yy, 01/(yy+1))")
+                st.dataframe(
+                    df_dur[['Codigo','Duration_anos','Data_Alvo','Ano_Referencia_DUR','DV01_Total_Ativo','Hedge_Bucket_Duration']]
+                    .sort_values(['Hedge_Bucket_Duration','Codigo'])
+                    .style.format({
+                        'Duration_anos':'{:,.4f}',
+                        'DV01_Total_Ativo':'{:,.2f}'
+                    }),
+                    use_container_width=True
+                )
+
+                # 6) Agregado por bucket
+                agg_dur = (
+                    df_dur.groupby('Hedge_Bucket_Duration', as_index=False)['DV01_Total_Ativo']
+                    .sum()
+                    .rename(columns={'Hedge_Bucket_Duration':'DI_bucket',
+                                    'DV01_Total_Ativo':'DV01_Agregado_R$/bp'})
+    )
+            # --------------------------
+            # Normaliza e expande df_di
+            # --------------------------
+            agg_consec['DI_bucket'] = _norm_bucket(agg_consec['DI_bucket'])
+            agg_dur['DI_bucket']    = _norm_bucket(agg_dur['DI_bucket'])
+
+            if 'df_di' in locals() and isinstance(df_di, pd.DataFrame) and not df_di.empty:
+                # df_di já normalizado no passo 2; expanda cobrindo YY necessários
+                needed = pd.unique(pd.concat([agg_consec['DI_bucket'], agg_dur['DI_bucket']], ignore_index=True))
+                df_di_use = _expand_df_di_to_cover(df_di, needed.tolist())
+                df_di_use['DI_bucket'] = _norm_bucket(df_di_use['DI_bucket'])
+            else:
+                df_di_use = pd.DataFrame(columns=["DI_bucket","DV01_DI_R$/contrato"])
+
+            # -----------------------------------
+            # Função utilitária: completar tabela
+            # -----------------------------------
+            def _finaliza_agregado(agg_df: pd.DataFrame, df_di_local: pd.DataFrame | None, s_pos: pd.Series | None) -> pd.DataFrame:
+                out_df = agg_df.copy()
+                out_df['DI_bucket'] = _norm_bucket(out_df['DI_bucket'])
+                if isinstance(df_di_local, pd.DataFrame) and not df_di_local.empty:
+                    out_df = out_df.merge(df_di_local, on='DI_bucket', how='left')
+                else:
+                    out_df['DV01_DI_R$/contrato'] = np.nan
+
+                dv01_ctrt = out_df['DV01_DI_R$/contrato']
+                out_df['Contratos_teoricos'] = np.where(
+                    dv01_ctrt.notna() & (dv01_ctrt != 0),
+                    (out_df['DV01_Agregado_R$/bp'] / dv01_ctrt).round(0),
+                    0
+                ).astype(int)
+
+                if s_pos is not None and not s_pos.empty:
+                    out_df = out_df.merge(s_pos.rename('Contratos_atuais'), on='DI_bucket', how='left')
+                else:
+                    out_df['Contratos_atuais'] = 0
+
+                out_df['Contratos_atuais'] = out_df['Contratos_atuais'].fillna(0).astype(int)
+                out_df['Hedge_necessario'] = out_df['Contratos_teoricos'] - out_df['Contratos_atuais']
+
+                for c in ["DV01_Agregado_R$/bp","DV01_DI_R$/contrato","Contratos_teoricos","Contratos_atuais","Hedge_necessario"]:
+                    if c not in out_df.columns: out_df[c] = 0
+                return out_df
+
+            # Aplica
+            resultado_consec = _finaliza_agregado(agg_consec, df_di_use,
+                                                s_posicoes_atuais if 's_posicoes_atuais' in locals() else None)
+            resultado_dur    = _finaliza_agregado(agg_dur, df_di_use,
+                                                s_posicoes_atuais if 's_posicoes_atuais' in locals() else None)
+
+            # Exibe tabelas
+            st.markdown("##### Resultado Agregado — Método Consecutivo")
+            cols_fmt = ['DI_bucket','DV01_Agregado_R$/bp','DV01_DI_R$/contrato','Contratos_teoricos','Contratos_atuais','Hedge_necessario']
+            st.dataframe(
+                resultado_consec[cols_fmt].sort_values('DI_bucket').style.format({
+                    'DV01_Agregado_R$/bp':'{:,.2f}','DV01_DI_R$/contrato':'{:,.2f}',
+                    'Contratos_teoricos':'{:,.0f}','Contratos_atuais':'{:,.0f}','Hedge_necessario':'{:,.0f}'
+                }),
+                use_container_width=True
+            )
+
+            st.markdown("##### Resultado Agregado — Método por Duration")
+            st.dataframe(
+                resultado_dur[cols_fmt].sort_values('DI_bucket').style.format({
+                    'DV01_Agregado_R$/bp':'{:,.2f}','DV01_DI_R$/contrato':'{:,.2f}',
+                    'Contratos_teoricos':'{:,.0f}','Contratos_atuais':'{:,.0f}','Hedge_necessario':'{:,.0f}'
+                }),
+                use_container_width=True
+            )
+
+
+            # -----------------------------
+            # Comparação lado a lado
+            # -----------------------------
+            comp = (resultado_consec[['DI_bucket','Contratos_teoricos']]
+                    .rename(columns={'Contratos_teoricos':'Contratos_teoricos_CONSEC'})
+                    ).merge(
+                        resultado_dur[['DI_bucket','Contratos_teoricos']]
+                        .rename(columns={'Contratos_teoricos':'Contratos_teoricos_DUR'}),
+                        on='DI_bucket', how='outer'
+                    ).merge(
+                        df_di_use[['DI_bucket','DV01_DI_R$/contrato']],
+                        on='DI_bucket', how='left'
+                    )
+
+            comp['Contratos_teoricos_CONSEC'] = comp['Contratos_teoricos_CONSEC'].fillna(0).astype(int)
+            comp['Contratos_teoricos_DUR']    = comp['Contratos_teoricos_DUR'].fillna(0).astype(int)
+            comp['Delta_(DUR-CONSEC)']        = (comp['Contratos_teoricos_DUR'] - comp['Contratos_teoricos_CONSEC']).astype(int)
+
+            st.markdown("##### Comparação de Contratos Teóricos (Duration vs Consecutivo)")
+            st.dataframe(
+                comp.sort_values('DI_bucket').style.format({
+                    'Contratos_teoricos_CONSEC':'{:,.0f}',
+                    'Contratos_teoricos_DUR':'{:,.0f}',
+                    'Delta_(DUR-CONSEC)':'{:,.0f}',
+                    'DV01_DI_R$/contrato':'{:,.2f}'
+                }),
+                use_container_width=True
+            )
 
             # Debug
             #st.caption("Debug DV01 contratos")

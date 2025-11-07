@@ -3,11 +3,9 @@
 """
 Fluxo unificado:
 1) Lê Dados/ativos_mapeados_para_controle.xlsx (colunas: Sub Classe, Emissor, Fundo, Ativo, ISIN, COD_XP, Vencimento_final)
-2) Para fundos BTG:
-   2.1) tenta obter TAXA_ISIN (cupom) no último dia disponível da carteira;
-   2.2) se NÃO houver ISIN e NÃO houver COD_XP, busca o cupom por VENCIMENTO+SUBCLASSE dentro da carteira (CARTEIRA_VENC).
+2) Para fundos BTG: tenta obter TAXA_ISIN (último dia disponível do fundo nas carteiras).
 3) Para todos: calcula Taxa_matriz (matriz de curvas; rating/YMF) como fallback.
-4) Prioridade: TAXA_EFETIVA = ISIN > CARTEIRA_VENC > MATRIZ.
+4) Regra de prioridade: TAXA_EFETIVA = TAXA_ISIN (se existir) senão Taxa_matriz.
 5) Propaga taxa entre fundos para o mesmo ativo (mesma chave sem “Fundo”), marcando sanity_propagado=True.
 6) Avisa se restarem ativos sem taxa.
 7) Grava: Dados/ativos_mapeados_com_taxa_efetiva.xlsx (com TAXA_EFETIVA única), e logs auxiliares.
@@ -28,14 +26,14 @@ import pandas_market_calendars as mcal
 from unidecode import unidecode
 
 # ========================= Paths / Config =========================
-CONTROLE_XLSX     = Path("Dados/ ativos_mapeados_para_controle.xlsx".replace(" ", ""))
-MATRIZ_XLSX       = Path("Dados/Matriz de Curvas 10102025.xlsx")
-OUT_FINAL_XLSX    = Path("Dados/ativos_mapeados_com_taxa_efetiva.xlsx")
+CONTROLE_XLSX = Path("Dados/ativos_mapeados_para_controle.xlsx")   # entrada
+MATRIZ_XLSX   = Path("Dados/Matriz de Curvas 31102025.xlsx")             # matriz de curvas
+OUT_FINAL_XLSX = Path("Dados/ativos_mapeados_com_taxa_efetiva.xlsx")
 OUT_SEM_TAXA_XLSX = Path("Dados/ativos_sem_taxa.xlsx")
 
 # Diretório da árvore de carteiras diárias (BTG)
 BASE_DIR = Path(r"Z:\Asset Management")  # ajuste se necessário
-SPECIFIC_DATE = pd.Timestamp("2025-10-17")
+SPECIFIC_DATE = pd.Timestamp("2025-10-31")            # <- Data que será inserida no campo #Data quando o toggle estiver ligado
 
 # DEBUG
 DEBUG = True
@@ -75,7 +73,33 @@ def _num(val):
     except Exception:
         return np.nan
 
+def _infer_subclasse(row: pd.Series) -> str:
+    sc = norm_text(row.get("Sub Classe", ""))
+    codxp = str(row.get("COD_XP", "")).upper()
+    ativo = str(row.get("Ativo", "")).upper()
+
+    # 1) Se já for específico, mantém
+    if any(tag in sc for tag in ["CDB","LFSN","LFSC","LF","LC","CRI","CRA","DEB"]):
+        return row.get("Sub Classe","")
+
+    # 2) Derivar pelo COD_XP/Ativo
+    if "CDB" in codxp or " CDB" in f" {ativo} ":
+        return "CDB"
+    if re.search(r"\bLFSN\b", ativo): return "LFSN"
+    if re.search(r"\bLFSC\b", ativo): return "LFSC"
+    if re.search(r"\bLF\b",   ativo): return "LF"
+    if "LC" in ativo: return "LC"
+
+    # 3) Se vier "TÍTULOS PRIVADOS", troca por algo plausível (ex.: CDB)
+    if "TITUL" in sc and "PRIV" in sc:
+        return "CDB"
+
+    return row.get("Sub Classe","")
+
+
+
 # ========================= Mapeamento de Fundos (nomes de pasta/arquivo) =========================
+# Mapa fornecido: chaves = como vem no CONTROLE, valores = nome usado no arquivo/pasta
 FUND_NAME_MAP_RAW = {
     "BBRASIL FIM CP RESP": "BBRASIL FIM CP RESP",
     "BH FIRF INFRA":       "BH INFRA",
@@ -89,61 +113,158 @@ FUND_NAME_MAP_RAW = {
     "REAL FIM":            "REAL FIM",
     "TOPAZIO INFRA":       "TOPAZIO INFRA",
 }
+# versão normalizada para lookup case/acentos-insensitive
 FUND_NAME_MAP = {norm_text(k): v for k, v in FUND_NAME_MAP_RAW.items()}
 
 def canon_fund_name(nome: str) -> str:
+    """
+    Retorna o nome canônico do fundo conforme usado nos arquivos/pastas.
+    Se não estiver no mapa, retorna versão normalizada (UPPER sem acento).
+    """
     n = norm_text(nome)
-    if not n: return ""
+    if not n:
+        return ""
     return FUND_NAME_MAP.get(n, n)
 
 def candidate_fund_names_for_files(nome: str) -> list[str]:
+    """
+    Para robustez, testa (nesta ordem):
+      1) nome canônico mapeado
+      2) nome original "como veio"
+      3) nome normalizado (UPPER sem acentos)
+    """
     raw = str(nome or "").strip()
     can = canon_fund_name(raw)
     nrm = norm_text(raw)
-    out: list[str] = []
-    for s in [can, raw, nrm]:
+    seq = [can, raw, nrm]
+    out = []
+    for s in seq:
         if s and s not in out:
             out.append(s)
     return out
 
 # ========================= Definições BTG/XP =========================
+# exceções: estes são XP (não procurar ISIN em árvore BTG)
 XP_EXCEPTIONS = {norm_text("JERA2026"), norm_text("REAL FIM")}
-BTG_FUNDS_WHITELIST = set()
-XP_FUNDS_WHITELIST  = set(XP_EXCEPTIONS)
+
+BTG_FUNDS_WHITELIST = set()   # opcional: {'AF HORIZONTE', 'GERAES', ...}
+XP_FUNDS_WHITELIST  = set(XP_EXCEPTIONS)  # marca XP pelas exceções informadas
 
 def is_xp_fund(nome: str) -> bool:
     n = norm_text(nome)
     if n in XP_FUNDS_WHITELIST: 
         return True
+    # heurística simples: contém 'XP' no nome → trata como XP
     return " XP" in f" {n} " or n.startswith("XP ") or n.endswith(" XP")
 
 def is_btg_fund(nome: str) -> bool:
     n = norm_text(nome)
     if n in BTG_FUNDS_WHITELIST: 
         return True
+    # default: tudo que NÃO for XP consideramos BTG (para tentar TAXA_ISIN)
     return not is_xp_fund(n)
 
-# ========================= Parte A — Localização de arquivos de carteira =========================
+# ========================= Parte A — TAXA_ISIN (último dia da carteira) =========================
 CAL_B3 = mcal.get_calendar("B3")
 MESES_PT = {"01":"Janeiro","02":"Fevereiro","03":"Março","04":"Abril","05":"Maio","06":"Junho",
             "07":"Julho","08":"Agosto","09":"Setembro","10":"Outubro","11":"Novembro","12":"Dezembro"}
 
+def taxas_isin_no_ultimo_dia(fundo: str,
+                              d_ini: str,
+                              d_fim: str) -> tuple[pd.Timestamp | None, pd.Series]:
+    """
+    Retorna (data_ultimo_dia_com_isin, mapa_taxas_por_isin)
+    O 'último dia' aqui é o último DIA ÚTIL <= d_fim que realmente contenha
+    a seção com ISIN e Coupon (não basta existir o arquivo).
+    """
+    # Garante limites coerentes
+    d_ini = pd.to_datetime(d_ini).date().isoformat()
+    d_fim = pd.to_datetime(d_fim).date().isoformat()
+
+    # Anda para trás no calendário da B3
+    for dt in CAL_B3.schedule(d_ini, d_fim).index[::-1]:
+        dt = pd.Timestamp(dt)
+        p = _path_fund(fundo, dt)
+        if p is None:
+            continue
+
+        # Tenta extrair ISIN↔cupom desse dia
+        df_tax = parse_tp_taxas_isin(p, fundo, dt)
+        if not df_tax.empty:
+            # Mapa {ISIN: taxa_frac}
+            mapa = df_tax.set_index("isin")["tax"].astype(float)
+            if mapa.notna().any():
+                return dt.normalize(), mapa
+
+    # Nada encontrado no intervalo
+    return None, pd.Series(dtype=float)
+
+
 def _path_fund(fund: str, dt: pd.Timestamp) -> Path | None:
+    """
+    Tenta montar o caminho do arquivo da carteira diária para um fundo em dt,
+    testando várias variantes de nome (mapeada, original, normalizada).
+    """
     base  = BASE_DIR / "FUNDOS e CLUBES" / "Carteira diária"
     ano   = str(dt.year)
     mes   = dt.strftime("%m"); nome = MESES_PT.get(mes, mes)
     dia   = dt.strftime("%d"); ddmm  = dt.strftime("%d%m")
-    pastas_mes = [f"{mes} - {nome}", f"{mes}- {nome}"]
+    pastas_mes    = [f"{mes} - {nome}", f"{mes}- {nome}"]
+
     for pasta in pastas_mes:
         dir_dia = base / ano / pasta / dia
-        if not dir_dia.exists(): 
+        if not dir_dia.exists():
             continue
         for fnd in candidate_fund_names_for_files(fund):
-            for nome_arq in [f"{ddmm}_{fnd}.xlsx", f"{fnd}.xlsx"]:
+            nomes_arquivo = [f"{ddmm}_{fnd}.xlsx", f"{fnd}.xlsx"]
+            for nome_arq in nomes_arquivo:
                 caminho = dir_dia / nome_arq
                 if caminho.exists():
                     return caminho
     return None
+
+HEADER_TP_RE = re.compile(r"titulos[\s_]*publicos", flags=re.I)
+
+def _find_tp_header_row(raw: pd.DataFrame) -> int | None:
+    col0 = raw.iloc[:, 0].astype(str).map(unidecode).str.strip()
+    for i, v in enumerate(col0):
+        if HEADER_TP_RE.fullmatch(v): return i
+    return None
+
+def _le_cupom(v, titulo: str) -> float | np.nan:
+    if pd.isna(v): return np.nan
+    try: x = float(str(v).replace(",", "."))
+    except Exception: return np.nan
+    # regra simples: trate como % a.a. → fração
+    return x / 100.0
+
+def parse_tp_taxas_isin(path: Path, fund: str, dt_ref: pd.Timestamp) -> pd.DataFrame:
+    raw = pd.read_excel(path, header=None)
+    lin_tp = _find_tp_header_row(raw)
+    if lin_tp is None:
+        return pd.DataFrame(columns=["isin","tax","data","fundo"])
+    header = raw.iloc[lin_tp + 1].astype(str).str.strip()
+    tp = raw.iloc[lin_tp + 2:].copy(); tp.columns = header
+    col_isin = next((c for c in tp.columns if "isin" in str(c).lower()), None)
+    if col_isin is None:
+        return pd.DataFrame(columns=["isin","tax","data","fundo"])
+    col_titulo = next((c for c in tp.columns if "titul" in str(c).lower()), None)
+    col_coupon = next((c for c in tp.columns if "coupon" in str(c).lower()), None)
+    tp = tp.dropna(subset=[col_isin]).copy()
+    tp[col_isin] = tp[col_isin].astype(str).str.strip().str.upper()
+    if col_coupon is not None:
+        if col_titulo is None:
+            col_titulo = "__TituloTemp__"; tp[col_titulo] = ""
+        tp["tax"] = tp.apply(lambda r: _le_cupom(r[col_coupon], str(r[col_titulo])), axis=1)
+    else:
+        tp["tax"] = np.nan
+    out = (tp.loc[:, [col_isin, "tax"]]
+             .rename(columns={col_isin: "isin"})
+             .dropna(subset=["isin","tax"])
+             .drop_duplicates(subset=["isin"], keep="last")
+             .assign(data=pd.to_datetime(dt_ref).normalize(), fundo=fund)
+             .loc[:, ["isin","tax","data","fundo"]])
+    return out
 
 def ultimo_dia_disponivel(fundo: str,
                           d_ini: str = "2024-01-01",
@@ -152,132 +273,17 @@ def ultimo_dia_disponivel(fundo: str,
     sched = CAL_B3.schedule(d_ini, d_fim).index[::-1]
     for dt in sched:
         p = _path_fund(fundo, dt)
-        if p is not None: 
-            return pd.Timestamp(dt), p
+        if p is not None: return pd.Timestamp(dt), p
     return None, None
 
-# ========================= Parte A1 — Parse seção (ISIN ↔ cupom) =========================
-HEADER_TP_PUBLICOS_RE = re.compile(r"titulos?\s*publicos", flags=re.I)
-HEADER_TP_PRIVADOS_RE = re.compile(r"titulos?\s*privados", flags=re.I)
-
-def _find_header_row(raw: pd.DataFrame, pat: re.Pattern) -> int | None:
-    col0 = raw.iloc[:, 0].astype(str).map(unidecode).str.strip()
-    for i, v in enumerate(col0):
-        if pat.fullmatch(v):
-            return i
-    return None
-
-def _le_cupom(v) -> float | np.nan:
-    if pd.isna(v): return np.nan
-    try:
-        x = float(str(v).replace(",", "."))
-    except Exception:
-        return np.nan
-    return x / 100.0
-
-def _norm_cols(df: pd.DataFrame) -> pd.DataFrame:
-    # normaliza nomes típicos (sem acentos, upper, trims)
-    ren = {}
-    for c in df.columns:
-        cn = norm_text(str(c))
-        if cn in {"ISIN"}: ren[c] = "ISIN"
-        elif "VENC" in cn: ren[c] = "Vencimento"
-        elif "TITUL" in cn: ren[c] = "Titulo"
-        elif "COUPON" in cn or "CUPOM" in cn: ren[c] = "Coupon"
-        elif cn in {"COD. ATIVO", "COD ATIVO", "COD_ATIVO"}: ren[c] = "Cod. Ativo"
-        elif "EMISSOR" in cn: ren[c] = "Emissor"
-        elif "DEPART" in cn: ren[c] = "Departamento"
-        elif "ESTRAT" in cn: ren[c] = "Estratégia"
-        elif cn == "PU": ren[c] = "PU"
-        elif cn == "% PL" or "PL" == cn: ren[c] = "% PL"
-    return df.rename(columns=ren)
-
-def _detect_subclasse_from_titulo(titulo: str) -> str:
-    t = norm_text(titulo)
-    # heurísticas simples
-    if " CDB" in f" {t} " or t.startswith("CDB") or "CDB" in t: return "CDB"
-    if re.search(r"\bLFSC\b|\bLF SN\b|\bLFSN\b", t): return "LFSN"
-    if re.search(r"\bLF\b", t): return "LF"
-    if re.search(r"\bLC\b", t): return "LC"
-    if "CRI" in t: return "CRI"
-    if "CRA" in t: return "CRA"
-    if "DEB" in t or "DEBENT" in t: return "DEBENTURE"
-    return ""
-
-def _parse_section(path: Path, header_pat: re.Pattern) -> pd.DataFrame:
-    raw = pd.read_excel(path, header=None)
-    lin = _find_header_row(raw, header_pat)
-    if lin is None:
-        return pd.DataFrame()
-    header = raw.iloc[lin + 1].astype(str).str.strip()
-    body = raw.iloc[lin + 2:].copy()
-    body.columns = header
-    body = body.dropna(how="all")
-    body = _norm_cols(body)
-    # tenta padronizar Vencimento
-    if "Vencimento" in body.columns:
-        body["Vencimento"] = pd.to_datetime(body["Vencimento"], errors="coerce", dayfirst=True).dt.normalize()
-    if "Coupon" in body.columns:
-        body["Coupon_frac"] = body["Coupon"].apply(_le_cupom)
-    else:
-        body["Coupon_frac"] = np.nan
-    # Sub Classe heurística a partir do Titulo (se houver)
-    if "Titulo" in body.columns and "Sub Classe" not in body.columns:
-        body["Sub Classe"] = body["Titulo"].astype(str).map(_detect_subclasse_from_titulo)
-    return body  # pode conter: ISIN, Vencimento, Titulo, Coupon, Coupon_frac, Emissor, Cod. Ativo, Sub Classe ...
-
-def parse_tp_taxas_isin(path: Path, fund: str, dt_ref: pd.Timestamp) -> pd.DataFrame:
-    # busca em Títulos Públicos e Privados (algumas carteiras podem ter o cupom do papel privado junto)
-    df_pub = _parse_section(path, HEADER_TP_PUBLICOS_RE)
-    df_pri = _parse_section(path, HEADER_TP_PRIVADOS_RE)
-    tp = pd.concat([df_pub, df_pri], ignore_index=True) if not df_pub.empty or not df_pri.empty else pd.DataFrame()
-    if tp.empty or "ISIN" not in tp.columns:
-        return pd.DataFrame(columns=["isin","tax","data","fundo"])
-    tp = tp.dropna(subset=["ISIN"]).copy()
-    tp["ISIN"] = tp["ISIN"].astype(str).str.strip().str.upper()
-    if "Coupon_frac" not in tp.columns:
-        tp["Coupon_frac"] = np.nan
-    out = (tp.loc[:, ["ISIN", "Coupon_frac"]]
-             .rename(columns={"ISIN":"isin", "Coupon_frac":"tax"})
-             .dropna(subset=["isin","tax"])
-             .drop_duplicates(subset=["isin"], keep="last")
-             .assign(data=pd.to_datetime(dt_ref).normalize(), fundo=fund)
-             .loc[:, ["isin","tax","data","fundo"]])
-    return out
-
-# =========== Parte A2 — Busca “CARTEIRA_VENC”: cupom por Vencimento + Sub Classe (sem ISIN/COD_XP) ===========
-def busca_cupom_por_venc_subclasse(path: Path, sub_classe: str, venc_dt: pd.Timestamp) -> float | np.nan:
-    """Procura nas seções (Públicos/Privados) o cupom do papel cujo Vencimento==venc_dt e Sub Classe compatível."""
-    frames = []
-    for pat in (HEADER_TP_PUBLICOS_RE, HEADER_TP_PRIVADOS_RE):
-        df = _parse_section(path, pat)
-        if df.empty:
-            continue
-        frames.append(df)
-    if not frames:
-        return np.nan
-    base = pd.concat(frames, ignore_index=True)
-    if "Vencimento" not in base.columns:
-        return np.nan
-    base = base.dropna(subset=["Vencimento"]).copy()
-    base["__ven_ok__"] = base["Vencimento"].dt.normalize() == pd.to_datetime(venc_dt).normalize()
-    # Sub Classe alvo (normalizada)
-    alvo = norm_text(sub_classe)
-    if "Sub Classe" in base.columns:
-        base["__sc_ok__"] = base["Sub Classe"].astype(str).map(norm_text) == alvo if alvo else True
-    else:
-        base["__sc_ok__"] = True  # se não houver, considera só vencimento
-    cand = base[base["__ven_ok__"] & base["__sc_ok__"]]
-    if cand.empty:
-        # relaxa subclasse se nada encontrado
-        cand = base[base["__ven_ok__"]]
-    if cand.empty:
-        return np.nan
-    # pega último registro não-nulo de Coupon_frac
-    cand = cand.dropna(subset=["Coupon_frac"])
-    if cand.empty:
-        return np.nan
-    return float(cand["Coupon_frac"].iloc[-1])
+def taxas_isin_no_ultimo_dia(fundo: str,
+                             d_ini: str = "2024-01-01",
+                             d_fim: str | None = None) -> tuple[pd.Timestamp | None, pd.Series]:
+    dt_ult, path = ultimo_dia_disponivel(fundo, d_ini, d_fim)
+    if path is None: return None, pd.Series(dtype=float)
+    df = parse_tp_taxas_isin(path, fundo, dt_ult)
+    if df.empty: return dt_ult, pd.Series(dtype=float)
+    return dt_ult, df.set_index("isin")["tax"]
 
 # ========================= Parte B — Matriz (rating / YMF) =========================
 def carrega_mapa_bancos(arquivo: Path) -> pd.DataFrame:
@@ -310,6 +316,7 @@ KNOWN_MAP = {
     "BANCO VOLKSWAGEN S/A": "Banco Volkswagen",
     "PARANA BANCO S.A.": "Paraná Banco",
     "BANCO RANDON": "Banco Randon",
+    "BANCO XP" : "Xp investimentos"
 }
 STOPWORDS = {"S","SA","S.A","BANCO","DO","DA","DE","DEL","BRASIL"}
 
@@ -459,12 +466,16 @@ def main():
     fal = [c for c in exigidas if c not in base.columns]
     if fal: raise ValueError(f"Colunas ausentes no controle: {fal}")
 
-    # --- A) Preparação base ---
+    # --- A) TAXA_ISIN (somente fundos BTG) ---
     dados = base.copy()
+    # aplica mapeamento para nome canônico de arquivo/pasta
     dados["_Fundo_can"] = dados["Fundo"].map(canon_fund_name)
     dados["_ISIN_up"]   = dados["ISIN"].astype(str).str.strip().str.upper()
-    dados["_COD_XP_up"] = dados["COD_XP"].astype(str).str.strip().str.upper()
-    dados["Vencimento_dt"] = pd.to_datetime(dados["Vencimento_final"], errors="coerce", dayfirst=True).dt.normalize()
+
+    # filtra apenas fundos BTG (XP ficam de fora)
+    pares_btg = (dados.loc[dados["Fundo"].map(is_btg_fund), ["_Fundo_can","_ISIN_up"]]
+                      .rename(columns={"_Fundo_can":"Fundo_can","_ISIN_up":"ISIN_up"}))
+    pares_btg = pares_btg[(pares_btg["Fundo_can"]!="") & (pares_btg["ISIN_up"]!="")].drop_duplicates()
 
     if DEBUG:
         dbg(f"[MAPA FUNDOS] exemplos de mapeamento:")
@@ -474,21 +485,11 @@ def main():
         except Exception:
             pass
 
-    # --- A1) TAXA_ISIN (somente fundos BTG e com ISIN) ---
-    pares_btg = (
-        dados.loc[
-            dados["Fundo"].map(is_btg_fund) & (dados["_ISIN_up"] != ""),
-            ["_Fundo_can","_ISIN_up"]
-        ]
-        .rename(columns={"_Fundo_can":"Fundo_can","_ISIN_up":"ISIN_up"})
-        .drop_duplicates()
-    )
-
     taxa_isin_rows = []
     if not pares_btg.empty:
         ano = date.today().year; d_ini = f"{ano}-01-01"; d_fim = SPECIFIC_DATE.isoformat()
         for fundo in sorted(pares_btg["Fundo_can"].unique()):
-            dbg(f"\n[BTG/ISIN] Procurando último dia de '{fundo}'...")
+            dbg(f"\n[BTG] Procurando último dia de '{fundo}'...")
             try:
                 dt_ult, mapa = taxas_isin_no_ultimo_dia(fundo, d_ini, d_fim)
                 if dt_ult is None:
@@ -512,55 +513,9 @@ def main():
     else:
         dados["TAXA_ISIN"] = np.nan
 
-    # --- A2) CARTEIRA_VENC (sem ISIN e sem COD_XP) ---
-    dados["Taxa_carteira_venc"] = np.nan
-    # agrupamos por fundo para abrir o arquivo da carteira uma única vez por fundo
-    fundos_para_busca = (
-        dados[
-            dados["Fundo"].map(is_btg_fund)
-            & (dados["_ISIN_up"]=="")
-            & (dados["_COD_XP_up"]=="")
-            & dados["Vencimento_dt"].notna()
-        ]
-        .loc[:, ["_Fundo_can"]]
-        .drop_duplicates()
-        .rename(columns={"_Fundo_can":"Fundo_can"})
-    )
-
-    cache_path_fundo: dict[str, tuple[pd.Timestamp | None, Path | None]] = {}
-    for _, r in fundos_para_busca.iterrows():
-        f = r["Fundo_can"]
-        try:
-            dt_ult, path = ultimo_dia_disponivel(f, d_ini=f"{date.today().year}-01-01", d_fim=SPECIFIC_DATE.isoformat())
-        except Exception:
-            dt_ult, path = None, None
-        cache_path_fundo[f] = (dt_ult, path)
-        if path is None:
-            dbg(f"[BTG/CARTEIRA_VENC] Sem arquivo para '{f}'.")
-
-    for idx, row in dados.iterrows():
-        # somente quando NÃO houver ISIN e NÃO houver COD_XP
-        if row.get("_ISIN_up","") != "" or row.get("_COD_XP_up","") != "":
-            continue
-        if not is_btg_fund(row.get("Fundo","")):
-            continue
-        fcan = row.get("_Fundo_can","")
-        venc = row.get("Vencimento_dt", pd.NaT)
-        subc = row.get("Sub Classe","")
-        if not fcan or pd.isna(venc):
-            continue
-        dt_ult, path = cache_path_fundo.get(fcan, (None, None))
-        if path is None:
-            continue
-        try:
-            taxa = busca_cupom_por_venc_subclasse(path, subc, venc)
-            if pd.notna(taxa):
-                dados.at[idx, "Taxa_carteira_venc"] = float(taxa)
-        except Exception as e:
-            dbg(f"[BTG/CARTEIRA_VENC] Erro {fcan}: {e}")
-
     # --- B) Taxa_matriz (rating/YMF) ---
-    dados["Vencimento do ativo"] = dados["Vencimento_final"]  # alias interno
+    dados = dados.copy()
+    dados["Vencimento do ativo"] = dados["Vencimento_final"]  # renome interno
     mapa_bancos = carrega_mapa_bancos(MATRIZ_XLSX)
 
     cache_matrizes: dict[str, dict] = {}
@@ -574,12 +529,22 @@ def main():
     dados["Modo_matriz"]   = None
     dados["Coluna_usada"]  = None
 
+    dados["Sub Classe"] = dados.apply(_infer_subclasse, axis=1)
+
+
     for idx, row in dados.iterrows():
         subc = row.get("Sub Classe","")
         emissor = row.get("Emissor","")
         venc = pd.to_datetime(row.get("Vencimento do ativo"), dayfirst=True, errors="coerce")
         du = du_b3(hoje, venc) if not pd.isna(venc) else np.nan
         sheet = escolhe_sheet(subc)
+        if sheet is None:
+            # tenta uma escolha básica por palavra-chave
+            s = norm_text(subc)
+            if "CDB" in s: sheet = "CDB PERCENTUAL"
+            elif "LFSC" in s: sheet = "LFSC PERCENTUAL"
+            elif "LFSN" in s: sheet = "LFSN PERCENTUAL"
+            elif re.search(r"\bLF\b", s): sheet = "LF PERCENTUAL"
         banco = emissor_para_banco(emissor, mapa_bancos)
 
         rating = np.nan
@@ -618,25 +583,14 @@ def main():
         dados.at[idx,"Coluna_usada"] = col_usada
         dados.at[idx,"Modo_matriz"]  = modo_mat
 
-    # --- C) Prioridade, Propagação e Origem ---
-    dados["TAXA_ISIN"]            = pd.to_numeric(dados.get("TAXA_ISIN"), errors="coerce")
-    dados["Taxa_carteira_venc"]   = pd.to_numeric(dados.get("Taxa_carteira_venc"), errors="coerce")
-    dados["Taxa_matriz"]          = pd.to_numeric(dados.get("Taxa_matriz"), errors="coerce")
+    # --- C) Prioridade e Propagação ---
+    dados["TAXA_ISIN"]   = pd.to_numeric(dados.get("TAXA_ISIN"), errors="coerce")
+    dados["Taxa_matriz"] = pd.to_numeric(dados.get("Taxa_matriz"), errors="coerce")
 
-    # prioridade: ISIN > CARTEIRA_VENC > MATRIZ
-    taxa_tmp = dados["TAXA_ISIN"].where(dados["TAXA_ISIN"].notna(), dados["Taxa_carteira_venc"])
-    dados["TAXA_EFETIVA"] = taxa_tmp.where(taxa_tmp.notna(), dados["Taxa_matriz"])
-
-    # origem
-    dados["origem_taxa"] = np.select(
-        [
-            dados["TAXA_ISIN"].notna(),
-            dados["Taxa_carteira_venc"].notna() & dados["TAXA_ISIN"].isna(),
-            dados["Taxa_matriz"].notna() & dados["TAXA_ISIN"].isna() & dados["Taxa_carteira_venc"].isna()
-        ],
-        ["ISIN", "CARTEIRA_VENC", "MATRIZ"],
-        default="NA"
-    )
+    # prioridade: TAXA_ISIN > Taxa_matriz
+    dados["TAXA_EFETIVA"] = dados["TAXA_ISIN"].where(dados["TAXA_ISIN"].notna(), dados["Taxa_matriz"])
+    dados["origem_taxa"] = np.where(dados["TAXA_ISIN"].notna(), "ISIN",
+                              np.where(dados["Taxa_matriz"].notna(), "MATRIZ", "NA"))
 
     # Propagar taxa entre fundos para o mesmo ativo (mesma chave sem "Fundo")
     dados["KEY"] = build_key(dados)
@@ -645,15 +599,13 @@ def main():
     precisa_propag = dados["TAXA_EFETIVA"].isna() & dados["TAXA_PROPAGADA"].notna()
     dados.loc[precisa_propag, "TAXA_EFETIVA"] = dados.loc[precisa_propag, "TAXA_PROPAGADA"]
     dados["sanity_propagado"] = precisa_propag
-    # marca origem propagada (apenas informativo; não altera prioridade real)
-    dados.loc[precisa_propag & (dados["origem_taxa"].eq("NA")), "origem_taxa"] = "PROPAGADA"
 
     # --- D) Avisos e saídas ---
     sem_taxa = dados[dados["TAXA_EFETIVA"].isna()].copy()
 
+    # salvar arquivo final (uma coluna de taxa efetiva + colunas úteis)
     cols_out = [c for c in [
         "Sub Classe","Emissor","Fundo","Ativo","ISIN","COD_XP","Vencimento_final",
-        "TAXA_ISIN","Taxa_carteira_venc","Taxa_matriz",
         "TAXA_EFETIVA","origem_taxa","sanity_propagado"
     ] if c in dados.columns]
     OUT_FINAL_XLSX.parent.mkdir(parents=True, exist_ok=True)
@@ -675,14 +627,12 @@ def main():
     # mini-log
     total = len(dados)
     n_isin   = int(dados["origem_taxa"].eq("ISIN").sum())
-    n_cart   = int(dados["origem_taxa"].eq("CARTEIRA_VENC").sum())
     n_matriz = int(dados["origem_taxa"].eq("MATRIZ").sum())
     n_prop   = int(dados["sanity_propagado"].sum())
     n_sem    = int(dados["TAXA_EFETIVA"].isna().sum())
     print("\n[RESUMO]")
     print(f" - Linhas totais:          {total:,}")
     print(f" - Por ISIN (BTG):         {n_isin:,}")
-    print(f" - Por CARTEIRA_VENC:      {n_cart:,}")
     print(f" - Por Matriz (fallback):  {n_matriz:,}")
     print(f" - Propagadas entre fundos:{n_prop:,}")
     print(f" - Sem taxa:               {n_sem:,}")

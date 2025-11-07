@@ -21,7 +21,7 @@ IFRAME_URL = "https://www2.bmf.com.br/pages/portal/bmfbovespa/lumis/lum-taxas-re
 
 # --- NOVOS TOGGLES ---
 USE_SPECIFIC_DATE = True                             # <- Toggle nova data específica (default False)
-SPECIFIC_DATE = pd.Timestamp("2025-10-17")            # <- Data que será inserida no campo #Data quando o toggle estiver ligado
+SPECIFIC_DATE = pd.Timestamp("2025-10-31")            # <- Data que será inserida no campo #Data quando o toggle estiver ligado
 
 # Toggle de intervalo
 BUILD_INTERVAL = False                                # <- Toggle de intervalo (default False)

@@ -13,7 +13,7 @@ import numpy as np
 PDF_DIR   = Path("Dados/saida_pdf_cetip_consolidado")
 PDF_CSV   = PDF_DIR / "consolidado_pdfs_codativos.csv"
 PDF_XLSX  = PDF_DIR / "consolidado_pdfs_codativos.xlsx"
-REL_GLOB  = "Dados/Relatório de Posição 2025-10-17.xlsx"
+REL_GLOB  = "Dados/Relatório de Posição 2025-10-31.xlsx"
 EXC_PATTS = ["Dados/Tratamento Exceções.xlsx"]
 
 OUT_DIR   = Path("Dados")
